@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+option go_package = "github.com/zsa/keymapp/api";
+package api;
+
+message Keyboard {
+    int32 id = 1;
+    string friendly_name = 2;
+    bool is_connected = 3;
+}
+
+message GetKeyboardsRequest {}
+message GetKeyboardsReply {
+    repeated Keyboard keyboards = 1;
+}
+
+message ConnectAnyKeyboardRequest {}
+
+message ConnectKeyboardRequest {
+    int32 id = 1;
+}
+message ConnectKeyboardReply {
+    bool success = 1;
+}
+
+message DisconnectKeyboardRequest {
+}
+
+message DisconnectKeyboardReply {
+    bool success = 1;
+}
+
+message SetLayerRequest {
+    int32 layer = 1;
+}
+message SetLayerReply {
+    bool success = 1;
+}
+
+message SetRGBLedRequest {
+    int32 led = 1;
+    int32 red = 2;
+    int32 green = 3;
+    int32 blue = 4;
+    int32 sustain = 5;
+}
+message SetRGBLedReply {
+    bool success = 1;
+}
+
+message SetRGBAllRequest {
+    int32 red = 1;
+    int32 green = 2;
+    int32 blue = 3;
+    int32 sustain = 4;
+}
+
+message SetRGBAllReply {
+    bool success = 1;
+}
+
+message SetStatusLedRequest {
+    int32 led = 1;
+    bool on = 2;
+    int32 sustain = 3;
+}
+
+message SetStatusLedReply {
+    bool success = 1;
+}
+
+message IncreaseBrightnessRequest {
+}
+
+message DecreaseBrightnessRequest {
+}
+
+message BrightnessUpdateReply {
+    bool success = 1;
+}
+
+service KeyboardService {
+    // Returns a list of all detected keyboards.
+    rpc GetKeyboards (GetKeyboardsRequest) returns (GetKeyboardsReply) {}
+    // Connects to a keyboard using given an id retrieved from GetKeyboards.
+    rpc ConnectKeyboard (ConnectKeyboardRequest) returns (ConnectKeyboardReply) {}
+    // Connects to the first available keyboard.
+    rpc ConnectAnyKeyboard (ConnectAnyKeyboardRequest) returns (ConnectKeyboardReply) {}
+    // Disconnects to a keyboard using given an id retrieved from GetKeyboards.
+    rpc DisconnectKeyboard (DisconnectKeyboardRequest) returns (DisconnectKeyboardReply) {}
+    // Sets the active layer of a connected keyboard.
+    rpc SetLayer (SetLayerRequest) returns (SetLayerReply) {}
+    // Unsets a previously set layer.
+    rpc UnsetLayer (SetLayerRequest) returns (SetLayerReply) {}
+    // Sets the color of a specific LED on the keyboard.
+    rpc SetRGBLed (SetRGBLedRequest) returns (SetRGBLedReply) {}
+    // Sets the color of all LEDs on the keyboard.
+    rpc SetRGBAll (SetRGBAllRequest) returns (SetRGBAllReply) {}
+    // Sets the status LED on the keyboard.
+    rpc SetStatusLed (SetStatusLedRequest) returns (SetStatusLedReply) {}
+    // Increases the brightness of the keyboard.
+    rpc IncreaseBrightness (IncreaseBrightnessRequest) returns (BrightnessUpdateReply) {}
+    // Decreases the brightness of the keyboard.
+    rpc DecreaseBrightness (DecreaseBrightnessRequest) returns (BrightnessUpdateReply) {}
+}

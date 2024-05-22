@@ -1,0 +1,17 @@
+[package]
+name = "kontroll"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.5.4", features = ["derive"] }
+prost = "0.12.4"
+tokio = { version="1.37.0", features = ["macros", "rt-multi-thread"]}
+
+[dependencies.tonic]
+version = "0.11.0"
+
+[build-dependencies]
+tonic-build = "0.11.0"
