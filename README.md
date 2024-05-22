@@ -40,4 +40,4 @@ We developed Kontroll to showcase the Keymapp API and to provide a simple way to
 
 If you wish to build your own client, you need to implement the Keymapp API using gRPC. The protobuf file [available here](proto/keymapp.proto) describes all the remote call procedures and messages available.
 
-An example on how to implement each procedure calls can be found in the [api.rs](src/api.rs) file.
+An example on how to implement each procedure call can be found in the [api.rs](src/api.rs) file.
