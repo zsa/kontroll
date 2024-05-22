@@ -32,7 +32,7 @@ Options:
 ```
 
 ## Development
-We developped Kontroll to showcase the Keymapp API and to provide a simple way to control your ZSA keyboard from the command line and scripts.
+We developed Kontroll to showcase the Keymapp API and to provide a simple way to control your ZSA keyboard from the command line and scripts.
 
 If you wish to build your own client, you need to implement the Keymapp API using gRPC and the protobuf file [available here](proto/keymapp.proto).
 
