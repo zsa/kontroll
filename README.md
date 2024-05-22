@@ -1,6 +1,10 @@
 # Kontroll
 Kontroll demonstates how to control the Keymapp API, making it easy to control your ZSA keyboard from the command line and scripts.
 
+You can use it to switch layers and control the keyboard's RGB and status LEDs programmatically via Keymapp. Call it from a script to make your ZSA keyboard react to system events in useful ways (switching to layers when apps are activated, or changing lighting when you get an important email, etc).
+
+Feel free to submit scripts that use Kontroll as pull requests via the [examples](examples/) directory.
+
 ## Installation
 If you have the rust toolchain installed, you can build Kontroll by cloning this repository and running the following command:
 ```bash
@@ -34,6 +38,6 @@ Options:
 ## Development
 We developed Kontroll to showcase the Keymapp API and to provide a simple way to control your ZSA keyboard from the command line and scripts.
 
-If you wish to build your own client, you need to implement the Keymapp API using gRPC and the protobuf file [available here](proto/keymapp.proto).
+If you wish to build your own client, you need to implement the Keymapp API using gRPC. The protobuf file [available here](proto/keymapp.proto) describes all the remote call procedures and messages available.
 
-An example on how to implement each endpoint can be found in the [api.rs](src/api.rs) file.
+An example on how to implement each procedure calls can be found in the [api.rs](src/api.rs) file.
