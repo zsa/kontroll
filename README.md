@@ -13,7 +13,7 @@ cargo build --release
 Otherwise, you can download the latest release from the [releases page](https://github.com/zsa/kontroll/releases) and add it to your PATH.
 
 ## Prerequisites
-Make sure you have a recent version of Keymapp running with a ZSA keyboard connected to your computer. In Keymapp's config page, make sure the the API is enabled. By default, the API listens on port `50051`. If you have changed the port in the UI, you can specify the port to Kontroll by setting the `KEYMAPP_PORT` environment variable.
+Make sure you have a recent version of Keymapp (v1.3.0+) running with a ZSA keyboard connected to your computer. In Keymapp's config page, make sure the the API is enabled. By default, the API listens on port `50051`. If you have changed the port in the UI, you can specify the port to Kontroll by setting the `KEYMAPP_PORT` environment variable.
 
 ## Usage
 ```
