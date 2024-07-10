@@ -154,6 +154,29 @@ pub async fn set_rgb_all(r: u8, g: u8, b: u8, sustain: i32) -> Result<bool, ApiE
     Ok(res)
 }
 
+// Set all leds to off then restore previous state after 1 millisecond
+pub async fn restore_rgb_leds() -> Result<bool, ApiError> {
+    let mut cli = get_client().await?;
+    let res = match cli
+        .set_rgb_all(SetRgbAllRequest {
+            red: 0,
+            green: 0,
+            blue: 0,
+            sustain: 1,
+        })
+        .await
+    {
+        Ok(r) => r.into_inner().success,
+        Err(e) => {
+            return Err(ApiError {
+                message: format!("Failed to set rgb: {}", e.message()),
+            })
+        }
+    };
+
+    Ok(res)
+}
+
 pub async fn set_status_led(led: usize, on: bool, sustain: i32) -> Result<bool, ApiError> {
     let mut cli = get_client().await?;
     let res = match cli
@@ -175,10 +198,34 @@ pub async fn set_status_led(led: usize, on: bool, sustain: i32) -> Result<bool, 
     Ok(res)
 }
 
+pub async fn restore_status_leds() -> Result<bool, ApiError> {
+    let mut cli = get_client().await?;
+    let res = match cli
+        .set_status_led(keymapp::SetStatusLedRequest {
+            led: 0,
+            on: false,
+            sustain: 1,
+        })
+        .await
+    {
+        Ok(r) => r.into_inner().success,
+        Err(e) => {
+            return Err(ApiError {
+                message: format!("Failed to set status led: {}", e.message()),
+            })
+        }
+    };
+
+    Ok(res)
+}
+
 pub async fn update_brightness(increase: bool) -> Result<bool, ApiError> {
     let mut cli = get_client().await?;
     if increase {
-        let res = match cli.increase_brightness(keymapp::IncreaseBrightnessRequest {}).await {
+        let res = match cli
+            .increase_brightness(keymapp::IncreaseBrightnessRequest {})
+            .await
+        {
             Ok(r) => r.into_inner().success,
             Err(e) => {
                 return Err(ApiError {
@@ -189,7 +236,10 @@ pub async fn update_brightness(increase: bool) -> Result<bool, ApiError> {
 
         Ok(res)
     } else {
-        let res = match cli.decrease_brightness(keymapp::DecreaseBrightnessRequest {}).await {
+        let res = match cli
+            .decrease_brightness(keymapp::DecreaseBrightnessRequest {})
+            .await
+        {
             Ok(r) => r.into_inner().success,
             Err(e) => {
                 return Err(ApiError {

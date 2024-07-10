@@ -42,6 +42,8 @@ enum Commands {
         #[arg(short, long, default_value = "0")]
         sustain: i32,
     },
+    #[command(about ="Restores the RGB color of all LEDs to their default")]
+    RestoreRGBLeds {},
     #[command(about = "Set / Unset a status LED")]
     SetStatusLed {
         #[arg(short, long, required = true)]
@@ -51,6 +53,8 @@ enum Commands {
         #[arg(short, long, default_value = "0")]
         sustain: i32,
     },
+    #[command(about ="Restores the status of all status LEDs to their default")]
+    RestoreStatusLeds {},
     #[command(about = "Increase the brightness of the keyboard's LEDs")]
     IncreaseBrightness,
     #[command(about = "Decrease the brightness of the keyboard's LEDs")]
@@ -150,6 +154,14 @@ pub async fn run() {
                 }
             }
         }
+        Commands::RestoreRGBLeds {} => match api::restore_rgb_leds().await {
+            Ok(_) => {
+                println!("All LEDs restored to their default color");
+            }
+            Err(e) => {
+                eprintln!("{}", e);
+            }
+        },
         Commands::SetStatusLed { led, off, sustain } => {
             let on = !off;
             match api::set_status_led(led, on, sustain).await {
@@ -162,6 +174,14 @@ pub async fn run() {
                 }
             }
         }
+        Commands::RestoreStatusLeds {} => match api::restore_status_leds().await {
+            Ok(_) => {
+                println!("All status LEDs restored to their default state");
+            }
+            Err(e) => {
+                eprintln!("{}", e);
+            }
+        },
         Commands::IncreaseBrightness => match api::update_brightness(true).await {
             Ok(_) => {
                 println!("Brightness increased");
