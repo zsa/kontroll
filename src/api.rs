@@ -29,9 +29,11 @@ pub async fn get_client() -> Result<KeyboardServiceClient<tonic::transport::Chan
     // Get port number from environment variable or use default
     let port = std::env::var("KEYMAPP_PORT").unwrap_or("50051".to_string());
     let addr = format!("http://localhost:{}", port);
-    let client = match KeyboardServiceClient::connect(addr).await {
-        Ok(c) => Ok(c),
-        Err(_) => Err(ApiError { message: format!("Failed to connect to Keymapp, make sure the api is running and listening to port {}", port) })
+    let timeout = std::time::Duration::from_secs(5);
+    let client = match tokio::time::timeout(timeout, KeyboardServiceClient::connect(addr)).await {
+        Ok(Ok(c)) => Ok(c),
+        Err(_) => Err(ApiError { message: format!("Connection to Keymapp timed out, make sure the api is running and listening to port {}", port) }),
+        Ok(Err(e)) => Err(ApiError { message: format!("Connection to Keymapp failed, with error {}", e.to_string()) })
     };
 
     Ok(client?)
@@ -39,6 +41,7 @@ pub async fn get_client() -> Result<KeyboardServiceClient<tonic::transport::Chan
 
 pub async fn list_keyboards() -> Result<Vec<Keyboard>, ApiError> {
     let mut cli = get_client().await?;
+    println!("Getting keyboards");
     let req = Request::new(GetKeyboardsRequest {});
     let res = match cli.get_keyboards(req).await {
         Ok(r) => r.into_inner().keyboards,
