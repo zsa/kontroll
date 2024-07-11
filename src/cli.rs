@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use std::process::exit;
 
 use crate::{api, utils};
 
@@ -80,6 +81,7 @@ pub async fn run() {
             }
             Err(e) => {
                 eprintln!("{}", e);
+                exit(1);
             }
         },
         Commands::Connect { index } => match api::connect(index).await {
@@ -88,6 +90,7 @@ pub async fn run() {
             }
             Err(e) => {
                 eprintln!("{}", e);
+                exit(1);
             }
         },
         Commands::ConnectAny => match api::connect_any().await {
@@ -96,6 +99,7 @@ pub async fn run() {
             }
             Err(e) => {
                 eprintln!("{}", e);
+                exit(1);
             }
         },
         Commands::Disconnect => match api::disconnect().await {
@@ -104,6 +108,7 @@ pub async fn run() {
             }
             Err(e) => {
                 eprintln!("{}", e);
+                exit(1);
             }
         },
         Commands::SetLayer { index } => match api::set_layer(index).await {
@@ -112,6 +117,7 @@ pub async fn run() {
             }
             Err(e) => {
                 eprintln!("{}", e);
+                exit(1);
             }
         },
         Commands::SetRGB {
@@ -123,7 +129,7 @@ pub async fn run() {
                 Ok(rgb) => rgb,
                 Err(_) => {
                     eprintln!("{} is not a valid hex color", color);
-                    return;
+                    exit(1);
                 }
             };
 
@@ -133,6 +139,7 @@ pub async fn run() {
                 }
                 Err(e) => {
                     eprintln!("{}", e);
+                    exit(1);
                 }
             }
         }
@@ -141,6 +148,7 @@ pub async fn run() {
                 Ok(rgb) => rgb,
                 Err(_) => {
                     eprintln!("{} is not a valid hex color", color);
+                    exit(1);
                     return;
                 }
             };
@@ -151,6 +159,7 @@ pub async fn run() {
                 }
                 Err(e) => {
                     eprintln!("{}", e);
+                    exit(1);
                 }
             }
         }
@@ -160,6 +169,7 @@ pub async fn run() {
             }
             Err(e) => {
                 eprintln!("{}", e);
+                exit(1);
             }
         },
         Commands::SetStatusLed { led, off, sustain } => {
@@ -171,6 +181,7 @@ pub async fn run() {
                 }
                 Err(e) => {
                     eprintln!("{}", e);
+                    exit(1);
                 }
             }
         }
@@ -180,6 +191,7 @@ pub async fn run() {
             }
             Err(e) => {
                 eprintln!("{}", e);
+                exit(1);
             }
         },
         Commands::IncreaseBrightness => match api::update_brightness(true).await {
@@ -188,6 +200,7 @@ pub async fn run() {
             }
             Err(e) => {
                 eprintln!("{}", e);
+                exit(1);
             }
         },
         Commands::DecreaseBrightness => match api::update_brightness(false).await {
@@ -196,6 +209,7 @@ pub async fn run() {
             }
             Err(e) => {
                 eprintln!("{}", e);
+                exit(1);
             }
         },
     }
