@@ -4,7 +4,13 @@ use keymapp::{
     ConnectAnyKeyboardRequest, ConnectKeyboardRequest, DisconnectKeyboardRequest,
     GetKeyboardsRequest,
 };
+
+#[cfg(target_os = "windows")]
+use uds_windows::UnixStream;
+
+#[cfg(not(target_os = "windows"))]
 use tokio::net::UnixStream;
+
 use tonic::{
     transport::{Endpoint, Uri},
     Request,
