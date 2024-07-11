@@ -4,7 +4,12 @@ use keymapp::{
     ConnectAnyKeyboardRequest, ConnectKeyboardRequest, DisconnectKeyboardRequest,
     GetKeyboardsRequest,
 };
-use tonic::Request;
+use tokio::net::UnixStream;
+use tonic::{
+    transport::{Endpoint, Uri},
+    Request,
+};
+use tower::service_fn;
 
 pub struct ApiError {
     message: String,
@@ -27,16 +32,31 @@ pub mod keymapp {
 
 pub async fn get_client() -> Result<KeyboardServiceClient<tonic::transport::Channel>, ApiError> {
     // Get port number from environment variable or use default
-    let port = std::env::var("KEYMAPP_PORT").unwrap_or("50051".to_string());
-    let addr = format!("http://localhost:{}", port);
-    let timeout = std::time::Duration::from_secs(5);
-    let client = match tokio::time::timeout(timeout, KeyboardServiceClient::connect(addr)).await {
-        Ok(Ok(c)) => Ok(c),
-        Err(_) => Err(ApiError { message: format!("Connection to Keymapp timed out, make sure the api is running and listening to port {}", port) }),
-        Ok(Err(e)) => Err(ApiError { message: format!("Connection to Keymapp failed, with error {}", e.to_string()) })
+    let dirs = match directories::BaseDirs::new() {
+        Some(dirs) => dirs,
+        None => Err(ApiError {
+            message: "Failed to get home directory".to_string(),
+        })?,
     };
+    let socket_path = dirs.config_dir().join(".keymapp/").join("keymapp.sock");
+    if !socket_path.exists() {
+        return Err(ApiError { message: format!("Keymapp socket not found at {}, make sure Keymapp is running and the API is started.", socket_path.to_str().unwrap()) });
+    }
 
-    Ok(client?)
+    let channel = Endpoint::try_from("http://[::]:50051")
+        .map_err(|e| ApiError {
+            message: format!("Failed to create api client: {}", e),
+        })?
+        .connect_with_connector(service_fn(move |_: Uri| {
+            UnixStream::connect(socket_path.clone())
+        }))
+        .await
+        .map_err(|e| ApiError {
+            message: format!("Failed to connect to keymapp: {}", e),
+        })?;
+
+    let client = KeyboardServiceClient::new(channel);
+    Ok(client)
 }
 
 pub async fn list_keyboards() -> Result<Vec<Keyboard>, ApiError> {
