@@ -5,9 +5,6 @@ use keymapp::{
     GetKeyboardsRequest,
 };
 
-#[cfg(target_os = "windows")]
-use uds_windows::UnixStream;
-
 #[cfg(not(target_os = "windows"))]
 use tokio::net::UnixStream;
 
@@ -36,6 +33,7 @@ pub mod keymapp {
     tonic::include_proto!("api");
 }
 
+#[cfg(not(target_os = "windows"))]
 pub async fn get_client() -> Result<KeyboardServiceClient<tonic::transport::Channel>, ApiError> {
     // Get port number from environment variable or use default
     let dirs = match directories::BaseDirs::new() {
@@ -63,6 +61,21 @@ pub async fn get_client() -> Result<KeyboardServiceClient<tonic::transport::Chan
 
     let client = KeyboardServiceClient::new(channel);
     Ok(client)
+}
+
+#[cfg(target_os = "windows")]
+pub async fn get_client() -> Result<KeyboardServiceClient<tonic::transport::Channel>, ApiError> {
+    // Get port number from environment variable or use default
+    let port = std::env::var("KEYMAPP_PORT").unwrap_or("50051".to_string());
+    let addr = format!("http://localhost:{}", port);
+    let timeout = std::time::Duration::from_secs(5);
+    let client = match tokio::time::timeout(timeout, KeyboardServiceClient::connect(addr)).await {
+        Ok(Ok(c)) => Ok(c),
+        Err(_) => Err(ApiError { message: format!("Connection to Keymapp timed out, make sure the api is running and listening to port {}", port) }),
+        Ok(Err(e)) => Err(ApiError { message: format!("Connection to Keymapp failed, with error {}", e.to_string()) })
+    };
+
+    Ok(client?)
 }
 
 pub async fn list_keyboards() -> Result<Vec<Keyboard>, ApiError> {
