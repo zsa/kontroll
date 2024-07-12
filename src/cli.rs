@@ -155,7 +155,6 @@ pub async fn run() {
                 Err(_) => {
                     eprintln!("{} is not a valid hex color", color);
                     exit(1);
-                    return;
                 }
             };
 
