@@ -57,9 +57,15 @@ enum Commands {
     #[command(about ="Restores the status of all status LEDs to their default")]
     RestoreStatusLeds {},
     #[command(about = "Increase the brightness of the keyboard's LEDs")]
-    IncreaseBrightness,
+    IncreaseBrightness {
+        #[arg(short, long, default_value = "1")]
+        steps: i32,
+    },
     #[command(about = "Decrease the brightness of the keyboard's LEDs")]
-    DecreaseBrightness,
+    DecreaseBrightness {
+        #[arg(short, long, default_value = "1")]
+        steps: i32,
+    },
     #[command(about = "Disconnect from the currently connected keyboard")]
     Disconnect,
 }
@@ -194,7 +200,7 @@ pub async fn run() {
                 exit(1);
             }
         },
-        Commands::IncreaseBrightness => match api::update_brightness(true).await {
+        Commands::IncreaseBrightness {steps} => match api::update_brightness(true, steps).await {
             Ok(_) => {
                 println!("Brightness increased");
             }
@@ -203,7 +209,7 @@ pub async fn run() {
                 exit(1);
             }
         },
-        Commands::DecreaseBrightness => match api::update_brightness(false).await {
+        Commands::DecreaseBrightness {steps}=> match api::update_brightness(false, steps).await {
             Ok(_) => {
                 println!("Brightness decreased");
             }

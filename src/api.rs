@@ -245,37 +245,50 @@ pub async fn restore_status_leds() -> Result<bool, ApiError> {
     Ok(res)
 }
 
-pub async fn update_brightness(increase: bool) -> Result<bool, ApiError> {
+pub async fn update_brightness(increase: bool, steps: i32) -> Result<bool, ApiError> {
     let mut cli = get_client().await?;
-    if increase {
-        let res = match cli
-            .increase_brightness(keymapp::IncreaseBrightnessRequest {})
-            .await
-        {
-            Ok(r) => r.into_inner().success,
-            Err(e) => {
-                return Err(ApiError {
-                    message: format!("Failed to increase brightness: {}", e.message()),
-                })
-            }
-        };
-
-        Ok(res)
-    } else {
-        let res = match cli
-            .decrease_brightness(keymapp::DecreaseBrightnessRequest {})
-            .await
-        {
-            Ok(r) => r.into_inner().success,
-            Err(e) => {
-                return Err(ApiError {
-                    message: format!("Failed to decrease brightness: {}", e.message()),
-                })
-            }
-        };
-
-        Ok(res)
+    let mut res = false;
+    if steps < 1 || steps > 255 {
+        return Err(ApiError {
+            message: "Brightness steps must be between 1 and 255".to_string(),
+        });
     }
+    if increase {
+        for _ in 0..steps {
+            res = match cli
+                .increase_brightness(keymapp::IncreaseBrightnessRequest {})
+                .await
+            {
+                Ok(r) => r.into_inner().success,
+                Err(e) => {
+                    return Err(ApiError {
+                        message: format!("Failed to increase brightness: {}", e.message()),
+                    })
+                }
+            };
+            if !res {
+                break;
+            }
+        }
+    } else {
+        for _ in 0..steps {
+            res = match cli
+                .decrease_brightness(keymapp::DecreaseBrightnessRequest {})
+                .await
+            {
+                Ok(r) => r.into_inner().success,
+                Err(e) => {
+                    return Err(ApiError {
+                        message: format!("Failed to decrease brightness: {}", e.message()),
+                    })
+                }
+            };
+            if !res {
+                break;
+            }
+        }
+    }
+    Ok(res)
 }
 
 pub async fn disconnect() -> Result<bool, ApiError> {
