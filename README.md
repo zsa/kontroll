@@ -15,7 +15,7 @@ cargo build --release
 Otherwise, you can download the latest release from the [releases page](https://github.com/zsa/kontroll/releases) and add it to your PATH.
 
 ## Prerequisites
-Make sure you have a recent version of Keymapp (v1.3.0+) running with a ZSA keyboard connected to your computer. In Keymapp's config page, make sure the the API is enabled.
+Make sure you have a recent version of Keymapp (v1.3.1+) running with a ZSA keyboard connected to your computer. In Keymapp's config page, make sure the the API is enabled.
 
 On Linux and macOS, keymapp create's a Unix Domain Socket located at $CONFIG_DIR/.keymapp/keymapp.sock.
 
