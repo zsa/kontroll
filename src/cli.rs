@@ -13,6 +13,11 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug, Clone)]
 enum Commands {
+    #[command(about = "Get the status of the currently connected keyboard")]
+    Status {
+        #[arg(short, long, default_value = "false")]
+        json: bool,
+    },
     #[command(about = "List all available keyboards")]
     List,
     #[command(about = "Connect to a keyboard given the index returned by the list command")]
@@ -43,7 +48,7 @@ enum Commands {
         #[arg(short, long, default_value = "0")]
         sustain: i32,
     },
-    #[command(about ="Restores the RGB color of all LEDs to their default")]
+    #[command(about = "Restores the RGB color of all LEDs to their default")]
     RestoreRGBLeds {},
     #[command(about = "Set / Unset a status LED")]
     SetStatusLed {
@@ -54,7 +59,7 @@ enum Commands {
         #[arg(short, long, default_value = "0")]
         sustain: i32,
     },
-    #[command(about ="Restores the status of all status LEDs to their default")]
+    #[command(about = "Restores the status of all status LEDs to their default")]
     RestoreStatusLeds {},
     #[command(about = "Increase the brightness of the keyboard's LEDs")]
     IncreaseBrightness {
@@ -74,6 +79,19 @@ pub async fn run() {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Status { json } => match api::get_status().await {
+            Ok(status) => {
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&status).unwrap());
+                } else {
+                    println!("{}", status)
+                }
+            }
+            Err(e) => {
+                eprintln!("{}", e);
+                exit(1);
+            }
+        },
         Commands::List => match api::list_keyboards().await {
             Ok(keyboards) => {
                 for (_i, keyboard) in keyboards.iter().enumerate() {
@@ -199,7 +217,7 @@ pub async fn run() {
                 exit(1);
             }
         },
-        Commands::IncreaseBrightness {steps} => match api::update_brightness(true, steps).await {
+        Commands::IncreaseBrightness { steps } => match api::update_brightness(true, steps).await {
             Ok(_) => {
                 println!("Brightness increased");
             }
@@ -208,14 +226,16 @@ pub async fn run() {
                 exit(1);
             }
         },
-        Commands::DecreaseBrightness {steps}=> match api::update_brightness(false, steps).await {
-            Ok(_) => {
-                println!("Brightness decreased");
+        Commands::DecreaseBrightness { steps } => {
+            match api::update_brightness(false, steps).await {
+                Ok(_) => {
+                    println!("Brightness decreased");
+                }
+                Err(e) => {
+                    eprintln!("{}", e);
+                    exit(1);
+                }
             }
-            Err(e) => {
-                eprintln!("{}", e);
-                exit(1);
-            }
-        },
+        }
     }
 }

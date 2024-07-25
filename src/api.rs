@@ -1,3 +1,4 @@
+use serde::Serialize;
 use std::fmt;
 
 use keymapp::{
@@ -76,6 +77,65 @@ pub async fn get_client() -> Result<KeyboardServiceClient<tonic::transport::Chan
     };
 
     Ok(client?)
+}
+
+#[derive(Serialize)]
+pub struct ConnectedKeyboard {
+    friendly_name: String,
+    firmware_version: String,
+    current_layer: i32,
+}
+
+#[derive(Serialize)]
+pub struct Status {
+    keymapp_version: String,
+    kontroll_version: String,
+    keyboard: Option<ConnectedKeyboard>,
+}
+
+impl fmt::Display for Status {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let keyboard = match &self.keyboard {
+            Some(k) => format!(
+                "Connected keyboard:\t{}\nFirmware version:\t{}\nCurrent layer:\t\t{}",
+                k.friendly_name, k.firmware_version, k.current_layer
+            ),
+            None => "No keyboard connected".to_string(),
+        };
+        write!(
+            f,
+            "Keymapp version:\t{}\nKontroll version:\t{}\n{}\n",
+            self.keymapp_version, self.kontroll_version, keyboard
+        )
+    }
+}
+
+pub async fn get_status() -> Result<Status, ApiError> {
+    let mut cli = get_client().await?;
+    let req = Request::new(keymapp::GetStatusRequest {});
+    match cli.get_status(req).await {
+        Ok(r) => {
+            let res = r.into_inner();
+            let keyboard = match res.connected_keyboard {
+                Some(k) => Some(ConnectedKeyboard {
+                    friendly_name: k.friendly_name,
+                    firmware_version: k.firmware_version,
+                    current_layer: k.current_layer,
+                }),
+                None => None,
+            };
+            return Ok(Status {
+                keymapp_version: res.keymapp_version,
+                kontroll_version: env!("CARGO_PKG_VERSION").to_string(),
+                keyboard,
+            });
+        }
+        Err(e) => {
+            return Err(ApiError {
+                message: format!("Failed to get status: {}", e.message()),
+            })
+        }
+    };
 }
 
 pub async fn list_keyboards() -> Result<Vec<Keyboard>, ApiError> {
