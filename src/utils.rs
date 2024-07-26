@@ -6,3 +6,26 @@ pub fn hex_to_rgb(hex: &str) -> Result<(u8, u8, u8), Box<dyn std::error::Error>>
 
     Ok((r, g, b))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn convert_hex_to_rgb() {
+        let hex = "#ff0000";
+        let (r, g, b) = hex_to_rgb(hex).unwrap();
+        assert_eq!(r, 255);
+        assert_eq!(g, 0);
+        assert_eq!(b, 0);
+    }
+
+    #[test]
+    fn convert_hex_to_rgb_without_pound() {
+        let hex = "3edece";
+        let (r, g, b) = hex_to_rgb(hex).unwrap();
+        assert_eq!(r, 62);
+        assert_eq!(g, 222);
+        assert_eq!(b, 206);
+    }
+}
