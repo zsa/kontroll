@@ -10,7 +10,7 @@ Feel free to submit scripts that use Kontroll as pull requests via the [examples
 
 ## Installation
 
-If you have the rust toolchain installed, you can build Kontroll by cloning this repository and running the following command:
+If you have the [rust toolchain and protoc installed](/dependencies.md), you can build Kontroll by cloning this repository and running the following command:
 
 ```bash
 cargo build --release
