@@ -9,6 +9,18 @@ message Keyboard {
     bool is_connected = 3;
 }
 
+message ConnectedKeyboard {
+    string friendly_name = 1;
+    string firmware_version = 2;
+    int32 current_layer = 3;
+}
+
+message GetStatusRequest {}
+message GetStatusReply {
+    string keymapp_version = 1;
+    ConnectedKeyboard connected_keyboard = 2;
+}
+
 message GetKeyboardsRequest {}
 message GetKeyboardsReply {
     repeated Keyboard keyboards = 1;
@@ -80,6 +92,7 @@ message BrightnessUpdateReply {
 }
 
 service KeyboardService {
+    rpc GetStatus (GetStatusRequest) returns (GetStatusReply) {}
     // Returns a list of all detected keyboards.
     rpc GetKeyboards (GetKeyboardsRequest) returns (GetKeyboardsReply) {}
     // Connects to a keyboard using given an id retrieved from GetKeyboards.

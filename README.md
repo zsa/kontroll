@@ -29,14 +29,19 @@ On Windows, by default, the API listens on port `50051`. If you have changed the
 ## Usage
 
 ```cli
+Usage: kontroll <COMMAND>
+
 Commands:
+  status               Get the status of the currently connected keyboard
   list                 List all available keyboards
   connect              Connect to a keyboard given the index returned by the list command
   connect-any          Connect to the first keyboard detected by keymapp
   set-layer            Set the layer of the currently connected keyboard
   set-rgb              Sets the RGB color of a LED
   set-rgb-all          Sets the RGB color of all LEDs
+  restore-rgb-leds     Restores the RGB color of all LEDs to their default
   set-status-led       Set / Unset a status LED
+  restore-status-leds  Restores the status of all status LEDs to their default
   increase-brightness  Increase the brightness of the keyboard's LEDs
   decrease-brightness  Decrease the brightness of the keyboard's LEDs
   disconnect           Disconnect from the currently connected keyboard
