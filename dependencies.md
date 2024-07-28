@@ -19,7 +19,7 @@ In order for tonic-build to build, it needs to know the path of protoc.
 Therefore, we need to add the executable path to an environment variable using powershell:
 
 ```pwsh
-Set-Item -Path Env:\PROTOC -Value '%USERPROFILE%\AppData\Local\Microsoft\WinGet\Packages\Google.Protobuf_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\protoc.exe'
+[Environment]::SetEnvironmentVariable('PROTOC', '%USERPROFILE%\AppData\Local\Microsoft\WinGet\Packages\Google.Protobuf_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\protoc.exe', 'User')
 ```
 
 ### Linux & MacOS
