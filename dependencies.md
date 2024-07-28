@@ -7,7 +7,7 @@ To install the rust toolchain for building the project go to
 
 ## Protobuf
 
-Protobuf is used to auto-generate the underlying API which communicates with Keymapp.
+Protobuf's CLI (protoc) is required to build this project as it is used to auto-generate rust code based on the [protobuf](/proto/keymapp.proto) of the underlying API which communicates with Keymapp.
 
 ### Windows
 
