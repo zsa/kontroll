@@ -5,6 +5,8 @@ is.
 
 ![example](./example.jpg)
 
+The time in the picture is 01:42:25 +- 5s.
+
 ## Time
 In the 1st row every key represents an odd hour (1,3,5,..). The 2nd row
 represents even hours (24 doesn't light up. It's treated as 0). 
