@@ -2,8 +2,8 @@
 
 ## Cargo
 
-To install the rust toolchain for building the project go to 
-[rust-lang.org](https://www.rust-lang.org/tools/install)
+To install the rust toolchain for building the project go to
+[rust-lang.org](https://www.rust-lang.org/tools/install) and follow the instructions.
 
 ## Protobuf
 
@@ -15,7 +15,8 @@ Install using [winget](https://learn.microsoft.com/en-us/windows/package-manager
 
 `winget install protobuf`
 
-Add environment variable using powershell:
+In order for tonic-build to build, it needs to know the path of protoc.
+Therefore, we need to add the executable path to an environment variable using powershell:
 
 ```pwsh
 Set-Item -Path Env:\PROTOC -Value '%USERPROFILE%\AppData\Local\Microsoft\WinGet\Packages\Google.Protobuf_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\protoc.exe'
