@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use std::process::exit;
 
-use crate::{api, utils};
+use kontroll::{api, utils};
 
 #[derive(Debug, Parser)]
 #[command(name = "Kontroll", version = env!("CARGO_PKG_VERSION"))]
