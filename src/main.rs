@@ -1,9 +1,5 @@
-mod cli;
-pub mod api;
-pub mod utils;
+use kontroll;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    cli::run().await;
-    Ok(())
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    kontroll::main()
 }
