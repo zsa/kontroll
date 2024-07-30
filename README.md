@@ -1,4 +1,4 @@
-# Kontroll
+# Kontroll ![crates.io](https://img.shields.io/crates/v/kontroll.svg)
 
 Kontroll demonstates how to control the Keymapp API, making it easy to control your ZSA keyboard from the command line and scripts. You can read more about it on [our blog](https://blog.zsa.io/introducing-kontroll/).
 
@@ -68,3 +68,5 @@ We developed Kontroll to showcase the Keymapp API and to provide a simple way to
 If you wish to build your own client, you need to implement the Keymapp API using gRPC. The protobuf file [available here](proto/keymapp.proto) describes all the remote call procedures and messages available.
 
 An example on how to implement each procedure call can be found in the [api.rs](src/api.rs) file.
+
+If you are using the Rust programming language, you may use the [Kontroll crate](https://crates.io/crates/kontroll).
