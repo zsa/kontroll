@@ -80,7 +80,7 @@ enum Commands {
 pub async fn run() {
     let cli = Cli::parse();
 
-    let mut api = Kontroll::new(cli.port).await.unwrap_or_else(|err| {
+    let api = Kontroll::new(cli.port).await.unwrap_or_else(|err| {
         eprintln!("{}", err);
         exit(1);
     });
