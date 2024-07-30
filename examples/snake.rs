@@ -1,4 +1,7 @@
-use kontroll::{api, utils};
+use kontroll::{
+    api::{self, Kontroll},
+    utils,
+};
 use macroquad::prelude::*;
 use std::collections::LinkedList;
 
@@ -38,6 +41,8 @@ async fn main() {
     let down = (0, 1);
     let right = (1, 0);
     let left = (-1, 0);
+
+    let mut api = runtime.block_on(Kontroll::new(None)).unwrap();
 
     loop {
         if !game_over {
@@ -85,7 +90,7 @@ async fn main() {
                     }
                 }
                 navigation_lock = false;
-                let _ = runtime.block_on(api::set_rgb_all(0, 0, 0, 0));
+                let _ = runtime.block_on(api.set_rgb_all(0, 0, 0, 0));
             }
         }
         if !game_over {
@@ -136,7 +141,7 @@ async fn main() {
                 DARKGREEN,
             );
 
-            let _ = runtime.block_on(api::set_rgb_led(
+            let _ = runtime.block_on(api.set_rgb_led(
                 utils::pos_to_voyager(snake.head.0 as u16, snake.head.1 as u16),
                 255,
                 0,
@@ -153,7 +158,7 @@ async fn main() {
                     LIME,
                 );
 
-                let _ = runtime.block_on(api::set_rgb_led(
+                let _ = runtime.block_on(api.set_rgb_led(
                     utils::pos_to_voyager(*x as u16, *y as u16),
                     80,
                     0,
@@ -170,7 +175,7 @@ async fn main() {
                 GOLD,
             );
 
-            let _ = runtime.block_on(api::set_rgb_led(
+            let _ = runtime.block_on(api.set_rgb_led(
                 utils::pos_to_voyager(fruit.0 as u16, fruit.1 as u16),
                 255,
                 255,
@@ -195,7 +200,7 @@ async fn main() {
 
             if get_time() - last_update > speed {
                 last_update = get_time();
-                let _ = runtime.block_on(api::restore_rgb_leds());
+                let _ = runtime.block_on(api.restore_rgb_leds());
             }
 
             if is_key_down(KeyCode::Enter) {

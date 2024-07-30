@@ -15,6 +15,7 @@ use tonic::{
 };
 use tower::service_fn;
 
+#[derive(Debug)]
 pub struct ApiError {
     message: String,
 }
