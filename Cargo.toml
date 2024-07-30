@@ -20,6 +20,7 @@ prost = "0.12.4"
 serde = { version = "1.0.204", features = ["serde_derive"] }
 serde_json = "1.0.120"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
+tokio-stream = { version = "0.1.15", features = ["net"] }
 tower = "0.4.13"
 uds_windows = "1.1.0"
 
@@ -31,3 +32,5 @@ tonic-build = "0.11.0"
 
 [dev-dependencies]
 tempfile = "3.10.1"
+macroquad = "0.4"
+assert_cmd = "2.0.15"

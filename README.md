@@ -1,4 +1,5 @@
 # Kontroll
+
 Kontroll demonstates how to control the Keymapp API, making it easy to control your ZSA keyboard from the command line and scripts. You can read more about it on [our blog](https://blog.zsa.io/introducing-kontroll/).
 
 You can use it to switch layers and control the keyboard's RGB and status LEDs programmatically via Keymapp. Call it from a script to make your ZSA keyboard react to system events in useful ways (switching to layers when apps are activated, or changing lighting when you get an important email, etc).
@@ -8,13 +9,17 @@ Note: All features of Kontroll work on the Moonlander and the Voyager. Only some
 Feel free to submit scripts that use Kontroll as pull requests via the [examples](examples/) directory.
 
 ## Installation
-If you have the rust toolchain installed, you can build Kontroll by cloning this repository and running the following command:
+
+If you have the [rust toolchain and protoc installed](/dependencies.md), you can build Kontroll by cloning this repository and running the following command:
+
 ```bash
 cargo build --release
 ```
+
 Otherwise, you can download the latest release from the [releases page](https://github.com/zsa/kontroll/releases) and add it to your PATH.
 
 ## Prerequisites
+
 Make sure you have a recent version of Keymapp (v1.3.1+) running with a ZSA keyboard connected to your computer. In Keymapp's config page, make sure the the API is enabled.
 
 On Linux and macOS, keymapp create's a Unix Domain Socket located at $CONFIG_DIR/.keymapp/keymapp.sock.
@@ -22,7 +27,8 @@ On Linux and macOS, keymapp create's a Unix Domain Socket located at $CONFIG_DIR
 On Windows, by default, the API listens on port `50051`. If you have changed the port in keymapp's settings UI, you can specify the port to Kontroll by setting the `KEYMAPP_PORT` environment variable.
 
 ## Usage
-```
+
+```cli
 Usage: kontroll <COMMAND>
 
 Commands:
@@ -46,7 +52,17 @@ Options:
   -V, --version  Print version
 ```
 
+## Examples
+
+Under [examples](/examples/README.md) is a showcase on how you could use the API.
+Run the examples by having the rust toolchain installed and run the following command:
+
+```bash
+cargo run --release --example snake
+```
+
 ## Development
+
 We developed Kontroll to showcase the Keymapp API and to provide a simple way to control your ZSA keyboard from the command line and scripts.
 
 If you wish to build your own client, you need to implement the Keymapp API using gRPC. The protobuf file [available here](proto/keymapp.proto) describes all the remote call procedures and messages available.
