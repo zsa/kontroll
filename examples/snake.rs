@@ -42,7 +42,7 @@ async fn main() {
     let right = (1, 0);
     let left = (-1, 0);
 
-    let mut api = runtime.block_on(Kontroll::new(None)).unwrap();
+    let api = runtime.block_on(Kontroll::new(None)).unwrap();
 
     loop {
         if !game_over {

@@ -137,9 +137,11 @@ impl Kontroll {
         Ok(Self { client })
     }
 
-    pub async fn get_status(&mut self) -> Result<Status, ApiError> {
+    pub async fn get_status(&self) -> Result<Status, ApiError> {
         let req = Request::new(keymapp::GetStatusRequest {});
-        match self.client.get_status(req).await {
+        // Tonic internals require a mutable reference to the client, so we clone it here.
+        // https://github.com/hyperium/tonic/issues/33#issuecomment-538154015
+        match self.client.clone().get_status(req).await {
             Ok(r) => {
                 let res = r.into_inner();
                 let keyboard = match res.connected_keyboard {
@@ -164,10 +166,10 @@ impl Kontroll {
         };
     }
 
-    pub async fn list_keyboards(&mut self) -> Result<Vec<Keyboard>, ApiError> {
+    pub async fn list_keyboards(&self) -> Result<Vec<Keyboard>, ApiError> {
         println!("Getting keyboards");
         let req = Request::new(GetKeyboardsRequest {});
-        let res = match self.client.get_keyboards(req).await {
+        let res = match self.client.clone().get_keyboards(req).await {
             Ok(r) => r.into_inner().keyboards,
             Err(e) => {
                 return Err(ApiError {
@@ -178,9 +180,9 @@ impl Kontroll {
         Ok(res)
     }
 
-    pub async fn connect(&mut self, index: usize) -> Result<bool, ApiError> {
+    pub async fn connect(&self, index: usize) -> Result<bool, ApiError> {
         let req = Request::new(ConnectKeyboardRequest { id: index as i32 });
-        let res = match self.client.connect_keyboard(req).await {
+        let res = match self.client.clone().connect_keyboard(req).await {
             Ok(r) => r.into_inner().success,
             Err(e) => {
                 return Err(ApiError {
@@ -192,9 +194,9 @@ impl Kontroll {
         Ok(res)
     }
 
-    pub async fn connect_any(&mut self) -> Result<bool, ApiError> {
+    pub async fn connect_any(&self) -> Result<bool, ApiError> {
         let req = Request::new(ConnectAnyKeyboardRequest {});
-        let res = match self.client.connect_any_keyboard(req).await {
+        let res = match self.client.clone().connect_any_keyboard(req).await {
             Ok(r) => r.into_inner().success,
             Err(e) => {
                 return Err(ApiError {
@@ -206,9 +208,10 @@ impl Kontroll {
         Ok(res)
     }
 
-    pub async fn set_layer(&mut self, index: usize) -> Result<bool, ApiError> {
+    pub async fn set_layer(&self, index: usize) -> Result<bool, ApiError> {
         let res = match self
             .client
+            .clone()
             .set_layer(SetLayerRequest {
                 layer: index as i32,
             })
@@ -226,7 +229,7 @@ impl Kontroll {
     }
 
     pub async fn set_rgb_led(
-        &mut self,
+        &self,
         index: usize,
         r: u8,
         g: u8,
@@ -235,6 +238,7 @@ impl Kontroll {
     ) -> Result<bool, ApiError> {
         let res = match self
             .client
+            .clone()
             .set_rgb_led(SetRgbLedRequest {
                 led: index as i32,
                 red: r as i32,
@@ -255,15 +259,10 @@ impl Kontroll {
         Ok(res)
     }
 
-    pub async fn set_rgb_all(
-        &mut self,
-        r: u8,
-        g: u8,
-        b: u8,
-        sustain: i32,
-    ) -> Result<bool, ApiError> {
+    pub async fn set_rgb_all(&self, r: u8, g: u8, b: u8, sustain: i32) -> Result<bool, ApiError> {
         let res = match self
             .client
+            .clone()
             .set_rgb_all(SetRgbAllRequest {
                 red: r as i32,
                 green: g as i32,
@@ -284,9 +283,10 @@ impl Kontroll {
     }
 
     // Set all leds to off then restore previous state after 1 millisecond
-    pub async fn restore_rgb_leds(&mut self) -> Result<bool, ApiError> {
+    pub async fn restore_rgb_leds(&self) -> Result<bool, ApiError> {
         let res = match self
             .client
+            .clone()
             .set_rgb_all(SetRgbAllRequest {
                 red: 0,
                 green: 0,
@@ -307,13 +307,14 @@ impl Kontroll {
     }
 
     pub async fn set_status_led(
-        &mut self,
+        &self,
         led: usize,
         on: bool,
         sustain: i32,
     ) -> Result<bool, ApiError> {
         let res = match self
             .client
+            .clone()
             .set_status_led(keymapp::SetStatusLedRequest {
                 led: led as i32,
                 on,
@@ -332,9 +333,10 @@ impl Kontroll {
         Ok(res)
     }
 
-    pub async fn restore_status_leds(&mut self) -> Result<bool, ApiError> {
+    pub async fn restore_status_leds(&self) -> Result<bool, ApiError> {
         let res = match self
             .client
+            .clone()
             .set_status_led(keymapp::SetStatusLedRequest {
                 led: 0,
                 on: false,
@@ -353,11 +355,7 @@ impl Kontroll {
         Ok(res)
     }
 
-    pub async fn update_brightness(
-        &mut self,
-        increase: bool,
-        steps: i32,
-    ) -> Result<bool, ApiError> {
+    pub async fn update_brightness(&self, increase: bool, steps: i32) -> Result<bool, ApiError> {
         let mut res = false;
         if steps < 1 || steps > 255 {
             return Err(ApiError {
@@ -368,6 +366,7 @@ impl Kontroll {
             for _ in 0..steps {
                 res = match self
                     .client
+                    .clone()
                     .increase_brightness(keymapp::IncreaseBrightnessRequest {})
                     .await
                 {
@@ -386,6 +385,7 @@ impl Kontroll {
             for _ in 0..steps {
                 res = match self
                     .client
+                    .clone()
                     .decrease_brightness(keymapp::DecreaseBrightnessRequest {})
                     .await
                 {
@@ -404,9 +404,10 @@ impl Kontroll {
         Ok(res)
     }
 
-    pub async fn disconnect(&mut self) -> Result<bool, ApiError> {
+    pub async fn disconnect(&self) -> Result<bool, ApiError> {
         let res = match self
             .client
+            .clone()
             .disconnect_keyboard(DisconnectKeyboardRequest {})
             .await
         {
