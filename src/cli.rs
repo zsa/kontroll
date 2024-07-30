@@ -1,12 +1,14 @@
 use clap::{Parser, Subcommand};
 use std::process::exit;
 
-use kontroll::{api, utils};
+use kontroll::{utils, Kontroll};
 
 #[derive(Debug, Parser)]
 #[command(name = "Kontroll", version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "Kontroll demonstates how to control the Keymapp API, making it easy to control your ZSA keyboard from the command line and scripts.", long_about = None)]
 pub struct Cli {
+    #[arg(short, long, name = "Server socket path or port on Windows")]
+    port: Option<String>,
     #[command(subcommand)]
     command: Commands,
 }
@@ -78,8 +80,13 @@ enum Commands {
 pub async fn run() {
     let cli = Cli::parse();
 
+    let api = Kontroll::new(cli.port).await.unwrap_or_else(|err| {
+        eprintln!("{}", err);
+        exit(1);
+    });
+
     match cli.command {
-        Commands::Status { json } => match api::get_status().await {
+        Commands::Status { json } => match api.get_status().await {
             Ok(status) => {
                 if json {
                     println!("{}", serde_json::to_string_pretty(&status).unwrap());
@@ -92,7 +99,7 @@ pub async fn run() {
                 exit(1);
             }
         },
-        Commands::List => match api::list_keyboards().await {
+        Commands::List => match api.list_keyboards().await {
             Ok(keyboards) => {
                 for (_i, keyboard) in keyboards.iter().enumerate() {
                     let connected = if keyboard.is_connected {
@@ -108,7 +115,7 @@ pub async fn run() {
                 exit(1);
             }
         },
-        Commands::Connect { index } => match api::connect(index).await {
+        Commands::Connect { index } => match api.connect(index).await {
             Ok(_) => {
                 println!("Connected to keyboard {}", index);
             }
@@ -117,7 +124,7 @@ pub async fn run() {
                 exit(1);
             }
         },
-        Commands::ConnectAny => match api::connect_any().await {
+        Commands::ConnectAny => match api.connect_any().await {
             Ok(_) => {
                 println!("Connected to the first keyboard detected by keymapp");
             }
@@ -126,7 +133,7 @@ pub async fn run() {
                 exit(1);
             }
         },
-        Commands::Disconnect => match api::disconnect().await {
+        Commands::Disconnect => match api.disconnect().await {
             Ok(_) => {
                 println!("Disconnected from the currently connected keyboard");
             }
@@ -135,7 +142,7 @@ pub async fn run() {
                 exit(1);
             }
         },
-        Commands::SetLayer { index } => match api::set_layer(index).await {
+        Commands::SetLayer { index } => match api.set_layer(index).await {
             Ok(_) => {
                 println!("Layer set to {}", index);
             }
@@ -157,7 +164,7 @@ pub async fn run() {
                 }
             };
 
-            match api::set_rgb_led(led, r, g, b, sustain).await {
+            match api.set_rgb_led(led, r, g, b, sustain).await {
                 Ok(_) => {
                     println!("LED {} set to color {}", led, color);
                 }
@@ -176,7 +183,7 @@ pub async fn run() {
                 }
             };
 
-            match api::set_rgb_all(r, g, b, sustain).await {
+            match api.set_rgb_all(r, g, b, sustain).await {
                 Ok(_) => {
                     println!("All LEDs set to color {}", color);
                 }
@@ -186,7 +193,7 @@ pub async fn run() {
                 }
             }
         }
-        Commands::RestoreRGBLeds {} => match api::restore_rgb_leds().await {
+        Commands::RestoreRGBLeds {} => match api.restore_rgb_leds().await {
             Ok(_) => {
                 println!("All LEDs restored to their default color");
             }
@@ -197,7 +204,7 @@ pub async fn run() {
         },
         Commands::SetStatusLed { led, off, sustain } => {
             let on = !off;
-            match api::set_status_led(led, on, sustain).await {
+            match api.set_status_led(led, on, sustain).await {
                 Ok(_) => {
                     let state = if on { "on" } else { "off" };
                     println!("Status LED {} turned {}", led, state);
@@ -208,7 +215,7 @@ pub async fn run() {
                 }
             }
         }
-        Commands::RestoreStatusLeds {} => match api::restore_status_leds().await {
+        Commands::RestoreStatusLeds {} => match api.restore_status_leds().await {
             Ok(_) => {
                 println!("All status LEDs restored to their default state");
             }
@@ -217,7 +224,7 @@ pub async fn run() {
                 exit(1);
             }
         },
-        Commands::IncreaseBrightness { steps } => match api::update_brightness(true, steps).await {
+        Commands::IncreaseBrightness { steps } => match api.update_brightness(true, steps).await {
             Ok(_) => {
                 println!("Brightness increased");
             }
@@ -226,16 +233,14 @@ pub async fn run() {
                 exit(1);
             }
         },
-        Commands::DecreaseBrightness { steps } => {
-            match api::update_brightness(false, steps).await {
-                Ok(_) => {
-                    println!("Brightness decreased");
-                }
-                Err(e) => {
-                    eprintln!("{}", e);
-                    exit(1);
-                }
+        Commands::DecreaseBrightness { steps } => match api.update_brightness(false, steps).await {
+            Ok(_) => {
+                println!("Brightness decreased");
             }
-        }
+            Err(e) => {
+                eprintln!("{}", e);
+                exit(1);
+            }
+        },
     }
 }
