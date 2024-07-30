@@ -176,7 +176,6 @@ impl Kontroll {
 
     /// Gets a list of available keyboards.
     pub async fn list_keyboards(&self) -> Result<Vec<Keyboard>, ApiError> {
-        println!("Getting keyboards");
         let req = Request::new(GetKeyboardsRequest {});
         let res = match self.client.clone().get_keyboards(req).await {
             Ok(r) => r.into_inner().keyboards,
