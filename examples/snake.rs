@@ -1,7 +1,4 @@
-use kontroll::{
-    api::{self, Kontroll},
-    utils,
-};
+use kontroll::{utils, Kontroll};
 use macroquad::prelude::*;
 use std::collections::LinkedList;
 

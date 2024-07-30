@@ -1,3 +1,4 @@
+/// Converts a hex color to a tuple of (r, g, b)
 pub fn hex_to_rgb(hex: &str) -> Result<(u8, u8, u8), Box<dyn std::error::Error>> {
     let hex = hex.trim_start_matches("#");
     let r = u8::from_str_radix(&hex[0..2], 16)?;
@@ -7,29 +8,7 @@ pub fn hex_to_rgb(hex: &str) -> Result<(u8, u8, u8), Box<dyn std::error::Error>>
     Ok((r, g, b))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn convert_hex_to_rgb() {
-        let hex = "#ff0000";
-        let (r, g, b) = hex_to_rgb(hex).unwrap();
-        assert_eq!(r, 255);
-        assert_eq!(g, 0);
-        assert_eq!(b, 0);
-    }
-
-    #[test]
-    fn convert_hex_to_rgb_without_pound() {
-        let hex = "3edece";
-        let (r, g, b) = hex_to_rgb(hex).unwrap();
-        assert_eq!(r, 62);
-        assert_eq!(g, 222);
-        assert_eq!(b, 206);
-    }
-}
-
+// Converts a position on the Voyager to the corresponding key index
 pub fn pos_to_voyager(x: u16, y: u16) -> usize {
     // 0,  5   is left 1st row
     // 6,  11  is left 2st row
@@ -54,4 +33,27 @@ pub fn pos_to_voyager(x: u16, y: u16) -> usize {
         [60, 60, 60, 60, 24, 26,        50, 51, 60, 60, 60, 60]
     ];
     voyager_layout[y as usize][x as usize]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn convert_hex_to_rgb() {
+        let hex = "#ff0000";
+        let (r, g, b) = hex_to_rgb(hex).unwrap();
+        assert_eq!(r, 255);
+        assert_eq!(g, 0);
+        assert_eq!(b, 0);
+    }
+
+    #[test]
+    fn convert_hex_to_rgb_without_pound() {
+        let hex = "3edece";
+        let (r, g, b) = hex_to_rgb(hex).unwrap();
+        assert_eq!(r, 62);
+        assert_eq!(g, 222);
+        assert_eq!(b, 206);
+    }
 }

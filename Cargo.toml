@@ -2,6 +2,11 @@
 name = "kontroll"
 version = "1.0.2"
 edition = "2021"
+license = "MIT"
+description = "Kontroll connects to Keymapp's API, allowing control of ZSAs keyboard programmaticaly."
+homepage = "https://blog.zsa.io/introducing-kontroll/"
+repository = "https://github.com/zsa/kontroll"
+readme = "README.md"
 
 [lib]
 name = "kontroll"

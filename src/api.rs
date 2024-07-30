@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::fmt;
 
+/// Generated code from the proto file
 use keymapp::{
     ConnectAnyKeyboardRequest, ConnectKeyboardRequest, DisconnectKeyboardRequest,
     GetKeyboardsRequest,
@@ -31,15 +32,18 @@ use self::keymapp::{
     SetRgbLedRequest,
 };
 
+/// Generated data structures from the proto file
 pub mod keymapp {
     tonic::include_proto!("api");
 }
 
+/// The kontroll API.
 pub struct Kontroll {
     client: KeyboardServiceClient<tonic::transport::Channel>,
 }
 
 #[derive(Serialize)]
+/// Data representation of a connected keyboard, used in the status response
 pub struct ConnectedKeyboard {
     friendly_name: String,
     firmware_version: String,
@@ -47,6 +51,7 @@ pub struct ConnectedKeyboard {
 }
 
 #[derive(Serialize)]
+/// Data representation of the status response, including the version of Kontroll and Keymapp and optionally the connected keyboard.
 pub struct Status {
     keymapp_version: String,
     kontroll_version: String,
@@ -71,6 +76,7 @@ impl fmt::Display for Status {
 }
 
 #[cfg(not(target_os = "windows"))]
+/// The get client function handles the connection to Keymapp, on Unix systems it uses a Unix domain socket, on Windows it uses a TCP connection.
 pub async fn get_client(
     path: Option<String>,
 ) -> Result<KeyboardServiceClient<tonic::transport::Channel>, ApiError> {
@@ -132,11 +138,13 @@ pub async fn get_client(
 }
 
 impl Kontroll {
+    /// Create a new Kontroll instance, connecting to Keymapp, optionally specifying a port number on Windows or a socket path on Unix.
     pub async fn new(port: Option<String>) -> Result<Self, ApiError> {
         let client = get_client(port).await?;
         Ok(Self { client })
     }
 
+    /// Gets Keymapp's version, Kontroll's version and the connected keyboard's information.
     pub async fn get_status(&self) -> Result<Status, ApiError> {
         let req = Request::new(keymapp::GetStatusRequest {});
         // Tonic internals require a mutable reference to the client, so we clone it here.
@@ -166,6 +174,7 @@ impl Kontroll {
         };
     }
 
+    /// Gets a list of available keyboards.
     pub async fn list_keyboards(&self) -> Result<Vec<Keyboard>, ApiError> {
         println!("Getting keyboards");
         let req = Request::new(GetKeyboardsRequest {});
@@ -180,6 +189,7 @@ impl Kontroll {
         Ok(res)
     }
 
+    /// Connects to a keyboard by index.
     pub async fn connect(&self, index: usize) -> Result<bool, ApiError> {
         let req = Request::new(ConnectKeyboardRequest { id: index as i32 });
         let res = match self.client.clone().connect_keyboard(req).await {
@@ -194,6 +204,7 @@ impl Kontroll {
         Ok(res)
     }
 
+    /// Connects to the first entry in the list of available keyboards.
     pub async fn connect_any(&self) -> Result<bool, ApiError> {
         let req = Request::new(ConnectAnyKeyboardRequest {});
         let res = match self.client.clone().connect_any_keyboard(req).await {
@@ -208,6 +219,7 @@ impl Kontroll {
         Ok(res)
     }
 
+    /// Sets a layer by index on the connected keyboard.
     pub async fn set_layer(&self, index: usize) -> Result<bool, ApiError> {
         let res = match self
             .client
@@ -228,6 +240,7 @@ impl Kontroll {
         Ok(res)
     }
 
+    /// Sets an RGB LED by index on the connected keyboard.
     pub async fn set_rgb_led(
         &self,
         index: usize,
@@ -259,6 +272,7 @@ impl Kontroll {
         Ok(res)
     }
 
+    /// Sets all RGB LEDs on the connected keyboard.
     pub async fn set_rgb_all(&self, r: u8, g: u8, b: u8, sustain: i32) -> Result<bool, ApiError> {
         let res = match self
             .client
@@ -282,7 +296,7 @@ impl Kontroll {
         Ok(res)
     }
 
-    // Set all leds to off then restore previous state after 1 millisecond
+    /// Restores all RGB LEDs on the connected keyboard.
     pub async fn restore_rgb_leds(&self) -> Result<bool, ApiError> {
         let res = match self
             .client
@@ -306,6 +320,7 @@ impl Kontroll {
         Ok(res)
     }
 
+    /// Sets a status LED by index on the connected keyboard.
     pub async fn set_status_led(
         &self,
         led: usize,
@@ -333,6 +348,7 @@ impl Kontroll {
         Ok(res)
     }
 
+    /// Restores all status LEDs on the connected keyboard.
     pub async fn restore_status_leds(&self) -> Result<bool, ApiError> {
         let res = match self
             .client
@@ -355,6 +371,7 @@ impl Kontroll {
         Ok(res)
     }
 
+    /// Sets the brightness of the connected keyboard. Several steps can be taken.
     pub async fn update_brightness(&self, increase: bool, steps: i32) -> Result<bool, ApiError> {
         let mut res = false;
         if steps < 1 || steps > 255 {
@@ -404,6 +421,7 @@ impl Kontroll {
         Ok(res)
     }
 
+    /// Disconnects the connected keyboard.
     pub async fn disconnect(&self) -> Result<bool, ApiError> {
         let res = match self
             .client
