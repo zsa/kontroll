@@ -10,11 +10,7 @@ use keymapp::{
 #[cfg(not(target_os = "windows"))]
 use tokio::net::UnixStream;
 
-use tonic::{
-    transport::{Endpoint, Uri},
-    Request,
-};
-use tower::service_fn;
+use tonic::Request;
 
 #[derive(Debug)]
 pub struct ApiError {
@@ -128,13 +124,12 @@ pub async fn get_client(
     let port = port.unwrap_or_else(|| std::env::var("KEYMAPP_PORT").unwrap_or("50051".to_string()));
     let addr = format!("http://localhost:{}", port);
     let timeout = std::time::Duration::from_secs(5);
-    let client = match tokio::time::timeout(timeout, KeyboardServiceClient::connect(addr)).await {
+
+    match tokio::time::timeout(timeout, KeyboardServiceClient::connect(addr)).await {
         Ok(Ok(c)) => Ok(c),
         Err(_) => Err(ApiError { message: format!("Connection to Keymapp timed out, make sure the api is running and listening to port {}", port) }),
-        Ok(Err(e)) => Err(ApiError { message: format!("Connection to Keymapp failed, with error {}", e.to_string()) })
-    };
-
-    Ok(client?)
+        Ok(Err(e)) => Err(ApiError { message: format!("Connection to Keymapp failed, with error {}", e) })
+    }
 }
 
 impl Kontroll {
@@ -160,18 +155,16 @@ impl Kontroll {
                     }),
                     None => None,
                 };
-                return Ok(Status {
+                Ok(Status {
                     keymapp_version: res.keymapp_version,
                     kontroll_version: env!("CARGO_PKG_VERSION").to_string(),
                     keyboard,
-                });
-            }
-            Err(e) => {
-                return Err(ApiError {
-                    message: format!("Failed to get status: {}", e.message()),
                 })
             }
-        };
+            Err(e) => Err(ApiError {
+                message: format!("Failed to get status: {}", e.message()),
+            }),
+        }
     }
 
     /// Gets a list of available keyboards.
@@ -373,7 +366,7 @@ impl Kontroll {
     /// Sets the brightness of the connected keyboard. Several steps can be taken.
     pub async fn update_brightness(&self, increase: bool, steps: i32) -> Result<bool, ApiError> {
         let mut res = false;
-        if steps < 1 || steps > 255 {
+        if !(1..=255).contains(&steps) {
             return Err(ApiError {
                 message: "Brightness steps must be between 1 and 255".to_string(),
             });
