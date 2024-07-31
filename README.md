@@ -24,7 +24,7 @@ Make sure you have a recent version of Keymapp (v1.3.2+) running with a ZSA keyb
 
 On Linux and macOS, keymapp creates a Unix Domain Socket located at $CONFIG_DIR/.keymapp/keymapp.sock.
 
-On Windows, by default, the API listens on port `50051'. If you have changed the port in keymapp's settings UI, you can specify the port to Kontroll by setting the `KEYMAPP_PORT` environment variable.
+On Windows, by default, the API listens on port 50051. If you have changed the port in keymapp's settings UI, you can specify the port to Kontroll by setting the `KEYMAPP_PORT` environment variable.
 
 ## Usage
 
