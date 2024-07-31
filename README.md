@@ -20,11 +20,11 @@ Otherwise, you can download the latest release from the [releases page](https://
 
 ## Prerequisites
 
-Make sure you have a recent version of Keymapp (v1.3.1+) running with a ZSA keyboard connected to your computer. In Keymapp's config page, make sure the the API is enabled.
+Make sure you have a recent version of Keymapp (v1.3.2+) running with a ZSA keyboard connected to your computer. In Keymapp's config page, make sure the API is enabled.
 
-On Linux and macOS, keymapp create's a Unix Domain Socket located at $CONFIG_DIR/.keymapp/keymapp.sock.
+On Linux and macOS, keymapp creates a Unix Domain Socket located at $CONFIG_DIR/.keymapp/keymapp.sock.
 
-On Windows, by default, the API listens on port `50051`. If you have changed the port in keymapp's settings UI, you can specify the port to Kontroll by setting the `KEYMAPP_PORT` environment variable.
+On Windows, by default, the API listens on port `50051'. If you have changed the port in keymapp's settings UI, you can specify the port to Kontroll by setting the `KEYMAPP_PORT` environment variable.
 
 ## Usage
 
