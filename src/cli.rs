@@ -101,7 +101,7 @@ pub async fn run() {
         },
         Commands::List => match api.list_keyboards().await {
             Ok(keyboards) => {
-                for (_i, keyboard) in keyboards.iter().enumerate() {
+                for keyboard in keyboards.iter() {
                     let connected = if keyboard.is_connected {
                         "(connected)"
                     } else {

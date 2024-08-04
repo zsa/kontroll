@@ -1,4 +1,4 @@
-# Kontroll ![crates.io](https://img.shields.io/crates/v/kontroll.svg)
+# Kontroll [![crates.io](https://img.shields.io/crates/v/kontroll.svg)](https://crates.io/crates/kontroll)
 
 Kontroll demonstates how to control the Keymapp API, making it easy to control your ZSA keyboard from the command line and scripts. You can read more about it on [our blog](https://blog.zsa.io/introducing-kontroll/).
 
