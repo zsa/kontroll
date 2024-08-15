@@ -11,6 +11,10 @@ use keymapp::{
 use tokio::net::UnixStream;
 
 use tonic::Request;
+use tonic::transport::{
+    Endpoint, Uri
+};
+use tower::service_fn;
 
 #[derive(Debug)]
 pub struct ApiError {
