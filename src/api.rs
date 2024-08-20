@@ -11,6 +11,12 @@ use keymapp::{
 use tokio::net::UnixStream;
 
 use tonic::Request;
+#[cfg(not(target_os = "windows"))]
+use tonic::transport::{
+    Endpoint, Uri
+};
+#[cfg(not(target_os = "windows"))]
+use tower::service_fn;
 
 #[derive(Debug)]
 pub struct ApiError {
