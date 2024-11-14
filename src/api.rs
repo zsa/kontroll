@@ -97,7 +97,13 @@ pub async fn get_client(
                         })
                     }
                 };
-                dirs.config_dir().join(".keymapp/").join("keymapp.sock")
+                let mut p = dirs.config_dir().join(".keymapp/").join("keymapp.sock");
+                if !p.exists() {
+                    // On MacOS, with the Keymapp app store version, the socket is sandboxed and
+                    // located in the app's container directory.
+                    p = dirs.home_dir().join("Library/Containers/io.zsa.keymapp/Data/Library/Application Support/.keymapp/keymapp.sock");
+                }
+                p
             }
         },
     };
@@ -121,6 +127,7 @@ pub async fn get_client(
     let client = KeyboardServiceClient::new(channel);
     Ok(client)
 }
+
 
 #[cfg(target_os = "windows")]
 pub async fn get_client(
