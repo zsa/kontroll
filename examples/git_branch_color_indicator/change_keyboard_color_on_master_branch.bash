@@ -66,13 +66,13 @@ ensure_keyboard_connection() {
 
 alert_master() {
   if ensure_keyboard_connection; then
-    kontroll set-rgb-all --color "E56717" &> /dev/null
+    kontroll set-rgb-all --color "$PROTECTED_BRANCH_COLOR" &> /dev/null
   fi
 }
 
 call_off_alert() {
   if ensure_keyboard_connection; then
-    kontroll set-rgb-all --color "#25A2DC" &> /dev/null
+    kontroll set-rgb-all --color "$FEATURE_BRANCH_COLOR" &> /dev/null
   fi
 }
 
