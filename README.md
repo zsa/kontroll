@@ -1,6 +1,6 @@
 # Kontroll [![crates.io](https://img.shields.io/crates/v/kontroll.svg)](https://crates.io/crates/kontroll)
 
-Kontroll demonstates how to control the Keymapp API, making it easy to control your ZSA keyboard from the command line and scripts. You can read more about it on [our blog](https://blog.zsa.io/introducing-kontroll/).
+Kontroll demonstrates how to control the Keymapp API, making it easy to control your ZSA keyboard from the command line and scripts. You can read more about it on [our blog](https://blog.zsa.io/introducing-kontroll/).
 
 You can use it to switch layers and control the keyboard's RGB and status LEDs programmatically via Keymapp. Call it from a script to make your ZSA keyboard react to system events in useful ways (switching to layers when apps are activated, or changing lighting when you get an important email, etc).
 
