@@ -1,6 +1,9 @@
 /// Converts a hex color to a tuple of (r, g, b)
 pub fn hex_to_rgb(hex: &str) -> Result<(u8, u8, u8), Box<dyn std::error::Error>> {
     let hex = hex.trim_start_matches("#");
+    if hex.len() != 6 || !hex.is_ascii() {
+        return Err(format!("{hex} is not a 6-digit hex color").into());
+    }
     let r = u8::from_str_radix(&hex[0..2], 16)?;
     let g = u8::from_str_radix(&hex[2..4], 16)?;
     let b = u8::from_str_radix(&hex[4..6], 16)?;
@@ -46,6 +49,13 @@ mod tests {
         assert_eq!(r, 255);
         assert_eq!(g, 0);
         assert_eq!(b, 0);
+    }
+
+    #[test]
+    fn short_or_non_ascii_colors_are_errors() {
+        assert!(hex_to_rgb("#fff").is_err());
+        assert!(hex_to_rgb("ééé").is_err());
+        assert!(hex_to_rgb("zzzzzz").is_err());
     }
 
     #[test]

@@ -1,447 +1,435 @@
-use serde::Serialize;
 use std::fmt;
+use std::time::{Duration, Instant};
 
-/// Generated code from the proto file
-use keymapp::{
-    ConnectAnyKeyboardRequest, ConnectKeyboardRequest, DisconnectKeyboardRequest,
-    GetKeyboardsRequest,
+use serde::Serialize;
+use zapp_core::device::ids::{self, Keyboard};
+use zapp_core::hid::{
+    HidConnection, HidEvent, CMD_RGB_CONTROL, CMD_SET_LAYER, CMD_SET_RGB_ALL_LED,
+    CMD_SET_RGB_LED, CMD_SET_STATUS_LED, CMD_STATUS_LED_CONTROL, CMD_UPDATE_BRIGHTNESS,
 };
+use zapp_hid_proto::{CMD_GET_PROTOCOL_VERSION, ERR_UNKNOWN_COMMAND};
 
-#[cfg(not(target_os = "windows"))]
-use tokio::net::UnixStream;
+use crate::leds::LedMap;
+use crate::ApiError;
 
-use tonic::Request;
-#[cfg(not(target_os = "windows"))]
-use tonic::transport::{
-    Endpoint, Uri
-};
-#[cfg(not(target_os = "windows"))]
-use tower::service_fn;
+/// How long to wait for the keyboard to answer.
+const ANSWER_TIMEOUT: Duration = Duration::from_secs(2);
 
-#[derive(Debug)]
-pub struct ApiError {
-    message: String,
+/// Wait for queued commands to be written when the firmware has no protocol
+/// version to answer with: `HidConnection`'s read loop flushes them every
+/// 20 ms.
+const FLUSH_WAIT: Duration = Duration::from_millis(100);
+
+/// How the keyboard is reached.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Transport {
+    Usb,
+    Bluetooth,
 }
 
-impl fmt::Display for ApiError {
+impl fmt::Display for Transport {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.message)
+        match self {
+            Self::Usb => write!(f, "USB"),
+            Self::Bluetooth => write!(f, "Bluetooth"),
+        }
     }
 }
 
-use self::keymapp::{
-    keyboard_service_client::KeyboardServiceClient, Keyboard, SetLayerRequest, SetRgbAllRequest,
-    SetRgbLedRequest,
-};
-
-/// Generated data structures from the proto file
-pub mod keymapp {
-    tonic::include_proto!("api");
+/// Where to open a keyboard.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Target {
+    /// The raw HID interface of the first USB device with this VID/PID.
+    Usb { vid: u16, pid: u16 },
+    /// A Bluetooth board, by its platform handle.
+    Bluetooth { key: String },
 }
 
-/// The kontroll API.
-pub struct Kontroll {
-    client: KeyboardServiceClient<tonic::transport::Channel>,
+/// A keyboard Kontroll can control, as `kontroll list` shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct KeyboardInfo {
+    /// Position in [`Kontroll::list`]; what `--keyboard` takes.
+    pub index: usize,
+    pub friendly_name: String,
+    pub transport: Transport,
+    /// Extra state worth showing, such as "not bonded".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    #[serde(skip)]
+    pub keyboard: Option<Keyboard>,
+    #[serde(skip)]
+    pub target: Target,
 }
 
-#[derive(Serialize)]
-/// Data representation of a connected keyboard, used in the status response
+impl KeyboardInfo {
+    /// A USB keyboard, named after its PID.
+    pub fn usb(index: usize, vid: u16, pid: u16) -> Self {
+        Self {
+            index,
+            friendly_name: ids::target_name_for_pid(pid).to_string(),
+            transport: Transport::Usb,
+            note: None,
+            keyboard: ids::identify_keyboard(vid, pid),
+            target: Target::Usb { vid, pid },
+        }
+    }
+
+    fn pid(&self) -> Option<u16> {
+        match self.target {
+            Target::Usb { pid, .. } => Some(pid),
+            Target::Bluetooth { .. } => None,
+        }
+    }
+}
+
+impl fmt::Display for KeyboardInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}: {} ({}", self.index, self.friendly_name, self.transport)?;
+        if let Some(note) = &self.note {
+            write!(f, ", {note}")?;
+        }
+        write!(f, ")")
+    }
+}
+
+/// The opened keyboard, as `kontroll status` shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ConnectedKeyboard {
-    friendly_name: String,
-    firmware_version: String,
-    current_layer: i32,
+    pub friendly_name: String,
+    pub transport: Transport,
+    /// `layoutId/revisionId`, from the firmware.
+    pub firmware_version: String,
+    /// `None` when the keyboard did not report it.
+    pub current_layer: Option<u8>,
+    /// `None` when the firmware predates the protocol version command.
+    pub protocol_version: Option<u8>,
 }
 
-#[derive(Serialize)]
-/// Data representation of the status response, including the version of Kontroll and Keymapp and optionally the connected keyboard.
+/// Kontroll's version and the opened keyboard.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Status {
-    keymapp_version: String,
-    kontroll_version: String,
-    keyboard: Option<ConnectedKeyboard>,
+    pub kontroll_version: String,
+    pub keyboard: ConnectedKeyboard,
 }
 
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let keyboard = match &self.keyboard {
-            Some(k) => format!(
-                "Connected keyboard:\t{}\nFirmware version:\t{}\nCurrent layer:\t\t{}",
-                k.friendly_name, k.firmware_version, k.current_layer
-            ),
-            None => "No keyboard connected".to_string(),
-        };
-        write!(
-            f,
-            "Keymapp version:\t{}\nKontroll version:\t{}\n{}\n",
-            self.keymapp_version, self.kontroll_version, keyboard
-        )
+        let k = &self.keyboard;
+        let unknown = |value: Option<u8>| value.map_or("unknown".to_string(), |v| v.to_string());
+        writeln!(f, "Kontroll version:\t{}", self.kontroll_version)?;
+        writeln!(f, "Connected keyboard:\t{}", k.friendly_name)?;
+        writeln!(f, "Transport:\t\t{}", k.transport)?;
+        writeln!(f, "Firmware version:\t{}", k.firmware_version)?;
+        writeln!(f, "Protocol version:\t{}", unknown(k.protocol_version))?;
+        writeln!(f, "Current layer:\t\t{}", unknown(k.current_layer))
     }
 }
 
-#[cfg(not(target_os = "windows"))]
-/// The get client function handles the connection to Keymapp, on Unix systems it uses a Unix domain socket, on Windows it uses a TCP connection.
-pub async fn get_client(
-    path: Option<String>,
-) -> Result<KeyboardServiceClient<tonic::transport::Channel>, ApiError> {
-    // Get socket path from the supplied path provided, or environment variable or set a default
-
-    let socket_path = match path {
-        Some(p) => std::path::PathBuf::from(p),
-        None => match std::env::var("KEYMAPP_SOCKET") {
-            Ok(p) => std::path::PathBuf::from(p),
-            Err(_) => {
-                let dirs = match directories::BaseDirs::new() {
-                    Some(dirs) => dirs,
-                    None => {
-                        return Err(ApiError {
-                            message: "Failed to get config directory".to_string(),
-                        })
-                    }
-                };
-                let mut p = dirs.config_dir().join(".keymapp/").join("keymapp.sock");
-                if !p.exists() {
-                    // On MacOS, with the Keymapp app store version, the socket is sandboxed and
-                    // located in the app's container directory.
-                    p = dirs.home_dir().join("Library/Containers/io.zsa.keymapp/Data/Library/Application Support/.keymapp/keymapp.sock");
-                }
-                p
-            }
-        },
-    };
-
-    if !socket_path.exists() {
-        return Err(ApiError { message: format!("Keymapp socket not found at {}, make sure Keymapp is running and the API is started.", socket_path.to_str().unwrap()) });
-    }
-
-    let channel = Endpoint::try_from("http://[::]:50051")
-        .map_err(|e| ApiError {
-            message: format!("Failed to create api client: {}", e),
-        })?
-        .connect_with_connector(service_fn(move |_: Uri| {
-            UnixStream::connect(socket_path.clone())
-        }))
-        .await
-        .map_err(|e| ApiError {
-            message: format!("Failed to connect to keymapp: {}", e),
-        })?;
-
-    let client = KeyboardServiceClient::new(channel);
-    Ok(client)
-}
-
-
-#[cfg(target_os = "windows")]
-pub async fn get_client(
-    port: Option<String>,
-) -> Result<KeyboardServiceClient<tonic::transport::Channel>, ApiError> {
-    // Get port number from the supplied path provided, or environment variable or set a default
-    let port = port.unwrap_or_else(|| std::env::var("KEYMAPP_PORT").unwrap_or("50051".to_string()));
-    let addr = format!("http://localhost:{}", port);
-    let timeout = std::time::Duration::from_secs(5);
-
-    match tokio::time::timeout(timeout, KeyboardServiceClient::connect(addr)).await {
-        Ok(Ok(c)) => Ok(c),
-        Err(_) => Err(ApiError { message: format!("Connection to Keymapp timed out, make sure the api is running and listening to port {}", port) }),
-        Ok(Err(e)) => Err(ApiError { message: format!("Connection to Keymapp failed, with error {}", e) })
-    }
+/// One open keyboard. Commands go out as they are called; dropping it closes
+/// the connection.
+pub struct Kontroll {
+    connection: Option<HidConnection>,
+    info: KeyboardInfo,
+    leds: LedMap,
+    firmware_version: String,
+    protocol_version: Option<u8>,
+    layer: Option<u8>,
+    paired: bool,
 }
 
 impl Kontroll {
-    /// Create a new Kontroll instance, connecting to Keymapp, optionally specifying a port number on Windows or a socket path on Unix.
-    pub async fn new(port: Option<String>) -> Result<Self, ApiError> {
-        let client = get_client(port).await?;
-        Ok(Self { client })
+    /// Every keyboard Kontroll can see: USB first, then Bluetooth.
+    pub fn list() -> Result<Vec<KeyboardInfo>, ApiError> {
+        let mut keyboards = usb_keyboards()?;
+        keyboards.extend(ble_keyboards(keyboards.len())?);
+        Ok(keyboards)
     }
 
-    /// Gets Keymapp's version, Kontroll's version and the connected keyboard's information.
-    pub async fn get_status(&self) -> Result<Status, ApiError> {
-        let req = Request::new(keymapp::GetStatusRequest {});
-        // Tonic internals require a mutable reference to the client, so we clone it here.
-        // https://github.com/hyperium/tonic/issues/33#issuecomment-538154015
-        match self.client.clone().get_status(req).await {
-            Ok(r) => {
-                let res = r.into_inner();
-                let keyboard = match res.connected_keyboard {
-                    Some(k) => Some(ConnectedKeyboard {
-                        friendly_name: k.friendly_name,
-                        firmware_version: k.firmware_version,
-                        current_layer: k.current_layer,
-                    }),
-                    None => None,
-                };
-                Ok(Status {
-                    keymapp_version: res.keymapp_version,
-                    kontroll_version: env!("CARGO_PKG_VERSION").to_string(),
-                    keyboard,
-                })
+    /// Opens keyboard `index` from [`Kontroll::list`], or the first one found
+    /// when `None`. Waits for the handshake to finish.
+    pub fn open(index: Option<usize>) -> Result<Self, ApiError> {
+        let usb = usb_keyboards()?;
+        let info = match index {
+            None => match usb.first() {
+                Some(first) => first.clone(),
+                None => ble_keyboards(0)?
+                    .into_iter()
+                    .next()
+                    .ok_or(ApiError::NoKeyboard)?,
+            },
+            Some(index) if index < usb.len() => {
+                let info = usb[index].clone();
+                if usb[..index].iter().any(|other| other.target == info.target) {
+                    return Err(ApiError::IdenticalKeyboards { index });
+                }
+                info
             }
-            Err(e) => Err(ApiError {
-                message: format!("Failed to get status: {}", e.message()),
-            }),
+            Some(index) => {
+                let ble = ble_keyboards(usb.len())?;
+                let count = usb.len() + ble.len();
+                if count == 0 {
+                    return Err(ApiError::NoKeyboard);
+                }
+                ble.into_iter()
+                    .nth(index - usb.len())
+                    .ok_or(ApiError::NoSuchKeyboard { index, count })?
+            }
+        };
+
+        let connection = connect(&info.target)?;
+        Self::from_connection(connection, info)
+    }
+
+    /// Runs Kontroll over an already open connection, such as one built with
+    /// `HidConnection::over` on a test link. Waits for the handshake.
+    pub fn from_connection(connection: HidConnection, info: KeyboardInfo) -> Result<Self, ApiError> {
+        let mut kontroll = Self {
+            connection: Some(connection),
+            leds: LedMap::for_keyboard(info.keyboard, info.pid()),
+            info,
+            firmware_version: String::new(),
+            protocol_version: None,
+            layer: None,
+            paired: false,
+        };
+        kontroll.handshake()?;
+        Ok(kontroll)
+    }
+
+    /// The opened keyboard and Kontroll's version.
+    pub fn status(&self) -> Status {
+        Status {
+            kontroll_version: env!("CARGO_PKG_VERSION").to_string(),
+            keyboard: ConnectedKeyboard {
+                friendly_name: self.info.friendly_name.clone(),
+                transport: self.info.transport,
+                firmware_version: self.firmware_version.clone(),
+                current_layer: self.layer,
+                protocol_version: self.protocol_version,
+            },
         }
     }
 
-    /// Gets a list of available keyboards.
-    pub async fn list_keyboards(&self) -> Result<Vec<Keyboard>, ApiError> {
-        let req = Request::new(GetKeyboardsRequest {});
-        let res = match self.client.clone().get_keyboards(req).await {
-            Ok(r) => r.into_inner().keyboards,
-            Err(e) => {
-                return Err(ApiError {
-                    message: format!("Failed to get keyboards: {}", e.message()),
-                })
-            }
-        };
-        Ok(res)
+    /// The keyboard this was opened on.
+    pub fn info(&self) -> &KeyboardInfo {
+        &self.info
     }
 
-    /// Connects to a keyboard by index.
-    pub async fn connect(&self, index: usize) -> Result<bool, ApiError> {
-        let req = Request::new(ConnectKeyboardRequest { id: index as i32 });
-        let res = match self.client.clone().connect_keyboard(req).await {
-            Ok(r) => r.into_inner().success,
-            Err(e) => {
-                return Err(ApiError {
-                    message: format!("Failed to connect: {}", e.message()),
-                })
-            }
-        };
-
-        Ok(res)
+    /// Moves to `layer`, turning every other layer off.
+    pub fn set_layer(&mut self, layer: u8) -> Result<(), ApiError> {
+        if !self.paired {
+            return Err(ApiError::NotPaired);
+        }
+        self.send(CMD_SET_LAYER, &[1, layer]);
+        self.sync()
     }
 
-    /// Connects to the first entry in the list of available keyboards.
-    pub async fn connect_any(&self) -> Result<bool, ApiError> {
-        let req = Request::new(ConnectAnyKeyboardRequest {});
-        let res = match self.client.clone().connect_any_keyboard(req).await {
-            Ok(r) => r.into_inner().success,
-            Err(e) => {
-                return Err(ApiError {
-                    message: format!("Failed to connect: {}", e.message()),
-                })
-            }
-        };
-
-        Ok(res)
+    /// Sets one RGB LED. Takes over the lighting until restored.
+    pub fn set_rgb_led(&mut self, index: usize, r: u8, g: u8, b: u8) -> Result<(), ApiError> {
+        let led = self.leds.firmware_index(index)?;
+        self.send(CMD_SET_RGB_LED, &[led, r, g, b]);
+        self.sync()
     }
 
-    /// Sets a layer by index on the connected keyboard.
-    pub async fn set_layer(&self, index: usize) -> Result<bool, ApiError> {
-        let res = match self
-            .client
-            .clone()
-            .set_layer(SetLayerRequest {
-                layer: index as i32,
-            })
-            .await
-        {
-            Ok(r) => r.into_inner().success,
-            Err(e) => {
-                return Err(ApiError {
-                    message: format!("Failed to set layer: {}", e.message()),
-                })
-            }
-        };
-
-        Ok(res)
+    /// Sets every RGB LED. Takes over the lighting until restored.
+    pub fn set_rgb_all(&mut self, r: u8, g: u8, b: u8) -> Result<(), ApiError> {
+        self.send(CMD_SET_RGB_ALL_LED, &[r, g, b]);
+        self.sync()
     }
 
-    /// Sets an RGB LED by index on the connected keyboard.
-    pub async fn set_rgb_led(
-        &self,
-        index: usize,
-        r: u8,
-        g: u8,
-        b: u8,
-        sustain: i32,
-    ) -> Result<bool, ApiError> {
-        let res = match self
-            .client
-            .clone()
-            .set_rgb_led(SetRgbLedRequest {
-                led: index as i32,
-                red: r as i32,
-                green: g as i32,
-                blue: b as i32,
-                sustain,
-            })
-            .await
-        {
-            Ok(r) => r.into_inner().success,
-            Err(e) => {
-                return Err(ApiError {
-                    message: format!("Failed to set rgb: {}", e.message()),
-                })
-            }
-        };
-
-        Ok(res)
+    /// Hands the lighting back to the keyboard's own RGB settings.
+    pub fn restore_rgb_leds(&mut self) -> Result<(), ApiError> {
+        self.send(CMD_RGB_CONTROL, &[0]);
+        self.sync()
     }
 
-    /// Sets all RGB LEDs on the connected keyboard.
-    pub async fn set_rgb_all(&self, r: u8, g: u8, b: u8, sustain: i32) -> Result<bool, ApiError> {
-        let res = match self
-            .client
-            .clone()
-            .set_rgb_all(SetRgbAllRequest {
-                red: r as i32,
-                green: g as i32,
-                blue: b as i32,
-                sustain,
-            })
-            .await
-        {
-            Ok(r) => r.into_inner().success,
-            Err(e) => {
-                return Err(ApiError {
-                    message: format!("Failed to set rgb: {}", e.message()),
-                })
-            }
-        };
-
-        Ok(res)
+    /// Turns status LED `led` (0 to 5) on or off. Takes over the status LEDs
+    /// until restored.
+    pub fn set_status_led(&mut self, led: u8, on: bool) -> Result<(), ApiError> {
+        self.send(CMD_SET_STATUS_LED, &[led, u8::from(on)]);
+        self.sync()
     }
 
-    /// Restores all RGB LEDs on the connected keyboard.
-    pub async fn restore_rgb_leds(&self) -> Result<bool, ApiError> {
-        let res = match self
-            .client
-            .clone()
-            .set_rgb_all(SetRgbAllRequest {
-                red: 0,
-                green: 0,
-                blue: 0,
-                sustain: 1,
-            })
-            .await
-        {
-            Ok(r) => r.into_inner().success,
-            Err(e) => {
-                return Err(ApiError {
-                    message: format!("Failed to set rgb: {}", e.message()),
-                })
-            }
-        };
-
-        Ok(res)
+    /// Hands the status LEDs back to the keyboard.
+    pub fn restore_status_leds(&mut self) -> Result<(), ApiError> {
+        self.send(CMD_STATUS_LED_CONTROL, &[0]);
+        self.sync()
     }
 
-    /// Sets a status LED by index on the connected keyboard.
-    pub async fn set_status_led(
-        &self,
-        led: usize,
-        on: bool,
-        sustain: i32,
-    ) -> Result<bool, ApiError> {
-        let res = match self
-            .client
-            .clone()
-            .set_status_led(keymapp::SetStatusLedRequest {
-                led: led as i32,
-                on,
-                sustain,
-            })
-            .await
-        {
-            Ok(r) => r.into_inner().success,
-            Err(e) => {
-                return Err(ApiError {
-                    message: format!("Failed to set status led: {}", e.message()),
-                })
-            }
-        };
-
-        Ok(res)
-    }
-
-    /// Restores all status LEDs on the connected keyboard.
-    pub async fn restore_status_leds(&self) -> Result<bool, ApiError> {
-        let res = match self
-            .client
-            .clone()
-            .set_status_led(keymapp::SetStatusLedRequest {
-                led: 0,
-                on: false,
-                sustain: 1,
-            })
-            .await
-        {
-            Ok(r) => r.into_inner().success,
-            Err(e) => {
-                return Err(ApiError {
-                    message: format!("Failed to set status led: {}", e.message()),
-                })
-            }
-        };
-
-        Ok(res)
-    }
-
-    /// Sets the brightness of the connected keyboard. Several steps can be taken.
-    pub async fn update_brightness(&self, increase: bool, steps: i32) -> Result<bool, ApiError> {
-        let mut res = false;
+    /// Steps the RGB brightness up or down, 1 to 255 steps.
+    pub fn update_brightness(&mut self, increase: bool, steps: i32) -> Result<(), ApiError> {
         if !(1..=255).contains(&steps) {
-            return Err(ApiError {
-                message: "Brightness steps must be between 1 and 255".to_string(),
-            });
+            return Err(ApiError::InvalidArgument(
+                "Brightness steps must be between 1 and 255".to_string(),
+            ));
         }
-        if increase {
-            for _ in 0..steps {
-                res = match self
-                    .client
-                    .clone()
-                    .increase_brightness(keymapp::IncreaseBrightnessRequest {})
-                    .await
-                {
-                    Ok(r) => r.into_inner().success,
-                    Err(e) => {
-                        return Err(ApiError {
-                            message: format!("Failed to increase brightness: {}", e.message()),
-                        })
-                    }
-                };
-                if !res {
-                    break;
-                }
-            }
-        } else {
-            for _ in 0..steps {
-                res = match self
-                    .client
-                    .clone()
-                    .decrease_brightness(keymapp::DecreaseBrightnessRequest {})
-                    .await
-                {
-                    Ok(r) => r.into_inner().success,
-                    Err(e) => {
-                        return Err(ApiError {
-                            message: format!("Failed to decrease brightness: {}", e.message()),
-                        })
-                    }
-                };
-                if !res {
-                    break;
-                }
-            }
+        for _ in 0..steps {
+            self.send(CMD_UPDATE_BRIGHTNESS, &[u8::from(increase)]);
         }
-        Ok(res)
+        self.sync()
     }
 
-    /// Disconnects the connected keyboard.
-    pub async fn disconnect(&self) -> Result<bool, ApiError> {
-        let res = match self
-            .client
-            .clone()
-            .disconnect_keyboard(DisconnectKeyboardRequest {})
-            .await
-        {
-            Ok(r) => r.into_inner().success,
-            Err(e) => {
-                return Err(ApiError {
-                    message: format!("Failed to disconnect: {}", e.message()),
-                })
-            }
-        };
+    fn connection(&self) -> &HidConnection {
+        self.connection
+            .as_ref()
+            .expect("connection is only taken on drop")
+    }
 
-        Ok(res)
+    fn send(&self, cmd: u8, params: &[u8]) {
+        self.connection().send(cmd, params);
+    }
+
+    /// Waits for the firmware version, the pairing answer, the first layer
+    /// event and the protocol version. The firmware sends the layer right
+    /// after pairing, before it answers the protocol version request.
+    fn handshake(&mut self) -> Result<(), ApiError> {
+        let deadline = Instant::now() + ANSWER_TIMEOUT;
+        let mut have_firmware = false;
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            let Some(event) = self.connection().recv_timeout(remaining) else {
+                return if have_firmware {
+                    Ok(())
+                } else {
+                    Err(ApiError::NoAnswer)
+                };
+            };
+            match event {
+                HidEvent::FirmwareVersion {
+                    layout_id,
+                    revision_id,
+                } => {
+                    self.firmware_version = format!("{layout_id}/{revision_id}");
+                    have_firmware = true;
+                }
+                HidEvent::PairingSuccess => self.paired = true,
+                HidEvent::PairingFail => self.paired = false,
+                HidEvent::LayerChanged(layer) => self.layer = Some(layer),
+                HidEvent::ProtocolVersion(version) if have_firmware => {
+                    self.protocol_version = Some(version);
+                    return Ok(());
+                }
+                // Firmware without the protocol version command.
+                HidEvent::Error(ERR_UNKNOWN_COMMAND) if have_firmware => return Ok(()),
+                HidEvent::Disconnected => return Err(ApiError::Disconnected),
+                _ => {}
+            }
+        }
+    }
+
+    /// Waits until every queued command is on the wire, and returns the first
+    /// error the keyboard answered them with.
+    ///
+    /// Commands go out in order, so the answer to a protocol version request
+    /// sent last means every earlier command was written.
+    fn sync(&mut self) -> Result<(), ApiError> {
+        let barrier = self.protocol_version.is_some();
+        let wait = if barrier {
+            self.send(CMD_GET_PROTOCOL_VERSION, &[]);
+            ANSWER_TIMEOUT
+        } else {
+            FLUSH_WAIT
+        };
+        let deadline = Instant::now() + wait;
+        let mut error = None;
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            let Some(event) = self.connection().recv_timeout(remaining) else {
+                return match (error, barrier) {
+                    (Some(code), _) => Err(ApiError::Firmware(code)),
+                    (None, true) => Err(ApiError::NoAnswer),
+                    (None, false) => Ok(()),
+                };
+            };
+            match event {
+                HidEvent::ProtocolVersion(_) if barrier => {
+                    return error.map_or(Ok(()), |code| Err(ApiError::Firmware(code)));
+                }
+                HidEvent::Error(code) => {
+                    error.get_or_insert(code);
+                }
+                HidEvent::LayerChanged(layer) => self.layer = Some(layer),
+                HidEvent::Disconnected => return Err(ApiError::Disconnected),
+                _ => {}
+            }
+        }
+    }
+}
+
+impl Drop for Kontroll {
+    fn drop(&mut self) {
+        if let Some(connection) = self.connection.take() {
+            connection.close();
+        }
+    }
+}
+
+/// ZSA keyboards running their firmware on USB, numbered from 0.
+fn usb_keyboards() -> Result<Vec<KeyboardInfo>, ApiError> {
+    let devices = zapp_core::device::list_devices()?;
+    Ok(devices
+        .into_iter()
+        .filter(|device| device.bootloader.is_none() && device.keyboard.is_some())
+        .enumerate()
+        .map(|(index, device)| KeyboardInfo::usb(index, device.vid, device.pid))
+        .collect())
+}
+
+#[cfg(feature = "ble")]
+fn ble_keyboards(first_index: usize) -> Result<Vec<KeyboardInfo>, ApiError> {
+    use zapp_ble::{BleBoard, Presence};
+
+    let Some(mut backend) = zapp_ble::backend::for_platform(&[]) else {
+        return Ok(Vec::new());
+    };
+    let sightings = match backend.sightings() {
+        Ok(sightings) => sightings,
+        // Bluetooth off or no adapter: nothing to list.
+        Err(_) => return Ok(Vec::new()),
+    };
+    Ok(sightings
+        .iter()
+        .filter_map(|sighting| {
+            let board = BleBoard::from_sighting(sighting)?;
+            let note = if !sighting.paired {
+                Some("not bonded".to_string())
+            } else if board.presence == Presence::Paired {
+                Some("not in range".to_string())
+            } else {
+                None
+            };
+            Some((board, note))
+        })
+        .enumerate()
+        .map(|(i, (board, note))| KeyboardInfo {
+            index: first_index + i,
+            friendly_name: board
+                .keyboard
+                .map(|keyboard| keyboard.to_string())
+                .or(board.name)
+                .unwrap_or_else(|| "ZSA keyboard".to_string()),
+            transport: Transport::Bluetooth,
+            note,
+            keyboard: board.keyboard,
+            target: Target::Bluetooth { key: board.key },
+        })
+        .collect())
+}
+
+#[cfg(not(feature = "ble"))]
+fn ble_keyboards(_first_index: usize) -> Result<Vec<KeyboardInfo>, ApiError> {
+    Ok(Vec::new())
+}
+
+fn connect(target: &Target) -> Result<HidConnection, ApiError> {
+    match target {
+        Target::Usb { vid, pid } => Ok(HidConnection::open(*vid, *pid)?),
+        #[cfg(feature = "ble")]
+        Target::Bluetooth { key } => Ok(zapp_ble::oryx::open(Some(key))?),
+        #[cfg(not(feature = "ble"))]
+        Target::Bluetooth { .. } => Err(ApiError::Bluetooth(
+            "this build of Kontroll has no Bluetooth support".to_string(),
+        )),
     }
 }

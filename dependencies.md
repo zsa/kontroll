@@ -4,25 +4,31 @@
 
 To install the rust toolchain for building the project go to
 [rust-lang.org](https://www.rust-lang.org/tools/install) and follow the instructions.
+Kontroll needs Rust 1.88 or newer.
 
-## Protobuf
+## Linux
 
-Protobuf's CLI (protoc) is required to build this project as it is used to auto-generate rust code based on the [protobuf](/proto/keymapp.proto) of the underlying API which communicates with Keymapp.
+The USB side builds hidapi's C code against libudev, so it needs a C compiler,
+`pkg-config` and the libudev development files:
 
-### Windows
+- Debian / Ubuntu: `sudo apt install build-essential pkg-config libudev-dev`
+- Fedora: `sudo dnf install gcc pkgconf-pkg-config systemd-devel`
+- Arch: `sudo pacman -S base-devel pkgconf systemd-libs`
 
-Install using [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/):
+Bluetooth goes through BlueZ over D-Bus in pure Rust and needs nothing extra
+to build; BlueZ must be running to use it.
 
-`winget install protobuf`
+To open the keyboard without root, install ZSA's udev rules from
+[zapp](https://github.com/zsa/zapp/tree/main/udev):
 
-In order for tonic-build to build, it needs to know the path of protoc.
-Therefore, we need to add the executable path to an environment variable using powershell:
-
-```pwsh
-[Environment]::SetEnvironmentVariable('PROTOC', '%USERPROFILE%\AppData\Local\Microsoft\WinGet\Packages\Google.Protobuf_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\protoc.exe', 'User')
+```bash
+sudo cp 50-zsa.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+sudo udevadm trigger
 ```
 
-### Linux & MacOS
+## macOS & Windows
 
-For Linux & MacOS you can follow Google's installation instructions:
-[grpc.io](https://grpc.io/docs/protoc-installation/)
+Nothing beyond the Rust toolchain (and the platform's C compiler, which comes
+with Xcode's command line tools on macOS and with Visual Studio's build tools on
+Windows).

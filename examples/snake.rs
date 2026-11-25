@@ -13,12 +13,7 @@ struct Snake {
 }
 
 #[macroquad::main("Snake")]
-#[tokio::main]
 async fn main() {
-    // Macroquad is single-threaded by using a custom async executor calling next_frame().await
-    // Therefore, we use tokio's runtime and block the thread in order to use the async api
-    let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-
     const WIDTH: i16 = 12;
     const HEIGHT: i16 = 4;
 
@@ -39,7 +34,7 @@ async fn main() {
     let right = (1, 0);
     let left = (-1, 0);
 
-    let api = runtime.block_on(Kontroll::new(None)).unwrap();
+    let mut api = Kontroll::open(None).unwrap();
 
     loop {
         if !game_over {
@@ -87,7 +82,7 @@ async fn main() {
                     }
                 }
                 navigation_lock = false;
-                let _ = runtime.block_on(api.set_rgb_all(0, 0, 0, 0));
+                let _ = api.set_rgb_all(0, 0, 0);
             }
         }
         if !game_over {
@@ -138,13 +133,12 @@ async fn main() {
                 DARKGREEN,
             );
 
-            let _ = runtime.block_on(api.set_rgb_led(
+            let _ = api.set_rgb_led(
                 utils::pos_to_voyager(snake.head.0 as u16, snake.head.1 as u16),
                 255,
                 0,
                 0,
-                0,
-            ));
+            );
 
             for (x, y) in &snake.body {
                 draw_rectangle(
@@ -155,13 +149,12 @@ async fn main() {
                     LIME,
                 );
 
-                let _ = runtime.block_on(api.set_rgb_led(
+                let _ = api.set_rgb_led(
                     utils::pos_to_voyager(*x as u16, *y as u16),
                     80,
                     0,
                     0,
-                    0,
-                ));
+                );
             }
 
             draw_rectangle(
@@ -172,13 +165,12 @@ async fn main() {
                 GOLD,
             );
 
-            let _ = runtime.block_on(api.set_rgb_led(
+            let _ = api.set_rgb_led(
                 utils::pos_to_voyager(fruit.0 as u16, fruit.1 as u16),
                 255,
                 255,
                 224,
-                0,
-            ));
+            );
 
             draw_text(format!("SCORE: {score}").as_str(), 10., 20., 20., DARKGRAY);
         } else {
@@ -197,7 +189,7 @@ async fn main() {
 
             if get_time() - last_update > speed {
                 last_update = get_time();
-                let _ = runtime.block_on(api.restore_rgb_leds());
+                let _ = api.restore_rgb_leds();
             }
 
             if is_key_down(KeyCode::Enter) {
