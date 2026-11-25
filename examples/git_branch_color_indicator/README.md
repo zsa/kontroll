@@ -4,7 +4,6 @@ This script changes your ZSA keyboard's LED colors based on your git branch to p
 
 ## Requirements
 
-- [Keymapp](https://www.zsa.io/flash/)
 - [Kontroll](https://github.com/zsa/kontroll)
 
 ## Installation
@@ -32,52 +31,16 @@ When a branch change is detected, the script:
 - Checks if the current branch matches any in your `PRIMARY_BRANCHES` array
 - Sets the keyboard color using Kontroll's `set-rgb-all` command to the color specified in the `PROTECTED_BRANCH_COLOR` variable, or the `FEATURE_BRANCH_COLOR` variable if the branch is not in the `PRIMARY_BRANCHES` array
 
-### Keymapp Management
+### Keyboard Connection
 
-The script handles Keymapp (the ZSA keyboard management application) automatically:
+Kontroll 2 talks to the keyboard directly, so Keymapp is not needed:
 
-- Checks if Keymapp is running using `pgrep`
-- Launches Keymapp if needed using macOS's `open` command
-- Uses AppleScript to move the Keymapp window off-screen
-- Manages keyboard connections using Kontroll CLI commands
+- Before setting a color, the script runs `kontroll list` to check that a keyboard is found
+- If none is found, it prints "Could not connect to keyboard. Is it plugged in?" and skips the color change
 
 ### Cross-Platform Considerations
 
-This script uses macOS-specific commands in several places. If you're adapting for another OS, you'll need to modify:
-
-1. Application Management:
-
-   ```bash
-   # macOS command to launch Keymapp
-   open -g -a "Keymapp"
-   ```
-
-2. Window Management:
-
-   ```bash
-   # macOS AppleScript for window control
-   osascript -e '
-     tell application "System Events"
-       tell process "keymapp"
-         tell window 1
-           set position to {2000, -1000}
-         end tell
-       end tell
-     end tell
-   '
-   ```
-
-3. Process Detection:
-   ```bash
-   # macOS process check
-   pgrep -q "keymapp"
-   ```
-
-For other operating systems:
-
-- Linux users might use `xdotool` or `wmctrl` for window management
-- Windows users might use PowerShell commands for process and window control
-- The Kontroll CLI commands should work the same across platforms
+The script uses only bash, git and Kontroll, so it is no longer tied to macOS.
 
 ## Configuration
 
@@ -94,7 +57,7 @@ FEATURE_BRANCH_COLOR="25A2DC"    # Yas Marina Blue
 
 ## Troubleshooting
 
-- If colors aren't changing, ensure Keymapp is installed and the keyboard is connected
+- If colors aren't changing, run `kontroll list` to check that your keyboard is found. A Wireless Voyager can also be reached over Bluetooth once it is bonded in your system's Bluetooth settings
 - If colors aren't changing after modifying the script, you may need to open a new terminal or source the script to reresh.
 - If you see no output when switching branches, that's normal! The script runs silently unless there's an error
-- If you need to manually reconnect: `kontroll connect-any`
+- There is no need to reconnect manually: each Kontroll command opens the keyboard on its own. If you have several keyboards, add `--keyboard <INDEX>` (the index from `kontroll list`) to the script's `kontroll set-rgb-all` calls

@@ -32,33 +32,11 @@ detect_branch_change() {
 }
 
 ensure_keyboard_connection() {
-  # Check if Keymapp is running
-  if ! pgrep -q "keymapp"; then
-    echo "Keymapp is not running. Starting it..."
-    open -g -a "Keymapp"
-    # Wait longer for Keymapp to fully start
-    sleep 2
-    # Move window off screen (effectively hiding it)
-    osascript -e '
-      tell application "System Events"
-        tell process "keymapp"
-          tell window 1
-            set position to {2000, -1000}
-          end tell
-        end tell
-      end tell
-    ' &>/dev/null
+  # Succeeds if kontroll list finds at least one keyboard
+  local keyboards
+  if keyboards=$(kontroll list 2>/dev/null) && [[ -n "$keyboards" ]]; then
+    return 0
   fi
-
-  # Give a few attempts to check for connection
-  for i in {1..3}; do
-    if kontroll list 2>/dev/null | grep -q "(connected)"; then
-      return 0
-    elif [ $i -lt 3 ]; then
-      kontroll connect-any 2>/dev/null
-      sleep 1
-    fi
-  done
 
   echo "Could not connect to keyboard. Is it plugged in?"
   return 1
