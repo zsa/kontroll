@@ -20,9 +20,22 @@ name = "kontroll"
 path = "src/main.rs"
 
 [features]
-default = ["ble"]
+default = ["ble", "upgrade"]
 # Wireless Voyager over Bluetooth.
 ble = ["dep:zapp-ble"]
+# `kontroll upgrade` in the binary; the library does not use it.
+upgrade = [
+    "dep:anyhow",
+    "dep:base64",
+    "dep:flate2",
+    "dep:minisign-verify",
+    "dep:reqwest",
+    "dep:self-replace",
+    "dep:semver",
+    "dep:tar",
+    "dep:tempfile",
+    "dep:zip",
+]
 
 [dependencies]
 clap = { version = "4.5.4", features = ["derive"] }
@@ -31,6 +44,16 @@ serde_json = "1.0.120"
 zapp-ble = { version = "0.1.0", path = "../zapp/zapp-ble", optional = true }
 zapp-core = { version = "0.1.1", path = "../zapp/zapp-core" }
 zapp-hid-proto = { version = "0.1.0", path = "../zapp/zapp-hid-proto" }
+anyhow = { version = "1", optional = true }
+base64 = { version = "0.22", optional = true }
+flate2 = { version = "1", optional = true }
+minisign-verify = { version = "0.3", optional = true }
+reqwest = { version = "0.13.2", default-features = false, features = ["blocking", "rustls"], optional = true }
+self-replace = { version = "1", optional = true }
+semver = { version = "1", optional = true }
+tar = { version = "0.4", optional = true }
+tempfile = { version = "3", optional = true }
+zip = { version = "9", default-features = false, features = ["deflate-flate2"], optional = true }
 
 [dev-dependencies]
 assert_cmd = "2.0.15"

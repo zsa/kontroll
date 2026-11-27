@@ -84,6 +84,26 @@ enum Commands {
     },
     #[command(about = "Deprecated, does nothing: Kontroll closes the keyboard after each command")]
     Disconnect,
+    /// Update kontroll itself to the newest release
+    #[cfg(feature = "upgrade")]
+    #[command(
+        long_about = "Update kontroll itself to the newest release.\n\n\
+            Asks the ZSA update server for a newer kontroll, shows its release \
+            notes, and on confirmation downloads it, checks its signature and \
+            replaces this kontroll with it. --check only reports.",
+        after_long_help = "Examples:\n  \
+            kontroll upgrade\n  \
+            kontroll upgrade --check\n  \
+            kontroll upgrade --yes"
+    )]
+    Upgrade {
+        /// Install without asking
+        #[arg(long, short = 'y', conflicts_with = "check")]
+        yes: bool,
+        /// Only report whether a newer kontroll exists
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 pub fn run() {
@@ -91,6 +111,15 @@ pub fn run() {
 
     if cli.port.is_some() {
         eprintln!("Warning: --port is deprecated and ignored, Kontroll no longer talks to Keymapp.");
+    }
+
+    #[cfg(feature = "upgrade")]
+    if let Commands::Upgrade { yes, check } = cli.command {
+        if let Err(e) = crate::upgrade::run(yes, check) {
+            eprintln!("{e:#}");
+            exit(1);
+        }
+        return;
     }
 
     if let Err(e) = execute(cli.command, cli.keyboard) {
@@ -178,6 +207,8 @@ fn execute(command: Commands, keyboard: Option<usize>) -> Result<(), ApiError> {
             Kontroll::open(keyboard)?.update_brightness(false, steps)?;
             println!("Brightness decreased");
         }
+        #[cfg(feature = "upgrade")]
+        Commands::Upgrade { .. } => unreachable!("handled in run"),
     }
     Ok(())
 }

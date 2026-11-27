@@ -1,0 +1,456 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CN_APPLICATION: zsa-technology-labs-inc/io-zsa-kontroll
+  # zsa/zapp commit the path dependencies in Cargo.toml build against.
+  ZAPP_REF: b05dc121c9028b30cb5c30177f45e50ec083f0dc
+
+# Kontroll is checked out into kontroll/ and zsa/zapp into zapp/, side by side,
+# for the `path = "../zapp/..."` dependencies.
+jobs:
+  # Fails the tag before anything is built or published.
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: kontroll
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: kontroll
+          persist-credentials: false
+
+      - name: Check release notes
+        run: |
+          file="release-notes/$GITHUB_REF_NAME.md"
+          if [ ! -s "$file" ] || [ -z "$(tr -d '[:space:]' < "$file")" ]; then
+            echo "::error::$file is missing or empty"
+            exit 1
+          fi
+
+      # kontroll upgrade compares the server's version with the binary's own.
+      - name: Check tag matches the crate version
+        run: |
+          crate=$(awk '
+            /^\[/ { in_package = ($0 == "[package]") }
+            in_package && /^version *=/ { gsub(/^version *= *"|"[[:space:]]*$/, ""); print; exit }
+          ' Cargo.toml)
+          if [ "v$crate" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $crate"
+            exit 1
+          fi
+
+  build:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-24.04
+            artifact: kontroll-linux-x86_64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+            artifact: kontroll-linux-aarch64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            artifact: kontroll-windows-x86_64
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            artifact: kontroll-windows-aarch64
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact: kontroll-macos-x86_64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: kontroll-macos-aarch64
+          - target: universal-apple-darwin
+            os: macos-latest
+            artifact: kontroll-macos-universal
+
+    runs-on: ${{ matrix.os }}
+    # Azure federated credential trusts the `release` environment subject.
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: kontroll
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: kontroll
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          repository: zsa/zapp
+          ref: ${{ env.ZAPP_REF }}
+          path: zapp
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        if: matrix.target != 'universal-apple-darwin'
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Install Rust toolchain (macOS universal)
+        if: matrix.target == 'universal-apple-darwin'
+        run: |
+          rustup target add x86_64-apple-darwin
+          rustup target add aarch64-apple-darwin
+
+      - name: Install Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libudev-dev
+
+      - name: Build
+        if: matrix.target != 'universal-apple-darwin'
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Build (macOS universal)
+        if: matrix.target == 'universal-apple-darwin'
+        run: |
+          cargo build --release --locked --target x86_64-apple-darwin
+          cargo build --release --locked --target aarch64-apple-darwin
+          mkdir -p target/universal
+          lipo -create \
+            target/x86_64-apple-darwin/release/kontroll \
+            target/aarch64-apple-darwin/release/kontroll \
+            -output target/universal/kontroll
+
+      - name: Azure login
+        if: runner.os == 'Windows'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          # The signer role is scoped to the certificate profile, not a subscription.
+          allow-no-subscriptions: true
+
+      - name: Sign Windows binary
+        if: runner.os == 'Windows'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: https://eus.codesigning.azure.net/
+          signing-account-name: zsa-code-signing-account
+          certificate-profile-name: ZSASigningProfile
+          files: ${{ github.workspace }}\kontroll\target\${{ matrix.target }}\release\kontroll.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          # Authenticate via the Azure CLI session from azure/login only.
+          exclude-environment-credential: true
+          exclude-workload-identity-credential: true
+          exclude-managed-identity-credential: true
+          exclude-shared-token-cache-credential: true
+          exclude-visual-studio-credential: true
+          exclude-visual-studio-code-credential: true
+          exclude-azure-cli-credential: false
+          exclude-azure-powershell-credential: true
+          exclude-azure-developer-cli-credential: true
+          exclude-interactive-browser-credential: true
+
+      - name: Verify Windows signature
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Where-Object { $_.Directory.Parent.Name -match '^\d+(\.\d+){3}$' } |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending |
+            Select-Object -First 1
+          if (-not $signtool) { throw "signtool.exe not found" }
+          & $signtool.FullName verify /pa /v "target\${{ matrix.target }}\release\kontroll.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Import Apple certificate
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 20)
+
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o $CERTIFICATE_PATH
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security import $CERTIFICATE_PATH -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+      - name: Verify signing identity
+        if: runner.os == 'macOS'
+        run: security find-identity -v -p codesigning $RUNNER_TEMP/signing.keychain-db
+
+      - name: Sign macOS binary
+        if: runner.os == 'macOS' && matrix.target != 'universal-apple-darwin'
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          codesign --force --options runtime \
+            --sign "Developer ID Application: ZSA Technology Labs Inc. ($APPLE_TEAM_ID)" \
+            target/${{ matrix.target }}/release/kontroll
+
+      - name: Sign macOS binary (universal)
+        if: matrix.target == 'universal-apple-darwin'
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          codesign --force --options runtime \
+            --sign "Developer ID Application: ZSA Technology Labs Inc. ($APPLE_TEAM_ID)" \
+            target/universal/kontroll
+
+      - name: Notarize macOS binary
+        if: runner.os == 'macOS'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ "${{ matrix.target }}" = "universal-apple-darwin" ]; then
+            BINARY_PATH=target/universal/kontroll
+          else
+            BINARY_PATH=target/${{ matrix.target }}/release/kontroll
+          fi
+
+          ZIP_PATH=$RUNNER_TEMP/kontroll-notarize.zip
+          ditto -c -k --keepParent "$BINARY_PATH" "$ZIP_PATH"
+
+          xcrun notarytool submit "$ZIP_PATH" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_ID_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+      - name: Clean up keychain
+        if: runner.os == 'macOS' && always()
+        run: security delete-keychain $RUNNER_TEMP/signing.keychain-db
+
+      - name: Package (unix)
+        if: runner.os != 'Windows' && matrix.target != 'universal-apple-darwin'
+        run: tar czf ${{ matrix.artifact }}.tar.gz -C target/${{ matrix.target }}/release kontroll
+
+      - name: Package (macOS universal)
+        if: matrix.target == 'universal-apple-darwin'
+        run: tar czf ${{ matrix.artifact }}.tar.gz -C target/universal kontroll
+
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path target/${{ matrix.target }}/release/kontroll.exe -DestinationPath ${{ matrix.artifact }}.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: kontroll/${{ matrix.artifact }}.*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: kontroll
+          persist-credentials: false
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "artifacts/*"
+
+      # Writes <archive>.sig next to each archive, for kontroll upgrade.
+      - name: Sign archives for the updater
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.KONTROLL_UPDATER_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          for file in artifacts/*.tar.gz artifacts/*.zip; do
+            npx --yes @tauri-apps/cli@2 signer sign "$file"
+            test -s "$file.sig"
+          done
+
+      - name: Read version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # One cn for every Cloud step. The CDN has answered with a 17-byte body
+      # instead of the binary, so retry until it is an ELF executable.
+      - name: Install cn
+        run: |
+          url=https://cdn.crabnebula.app/download/crabnebula/cn-cli/latest/platform/linux-binary-x86_64
+          bin="$RUNNER_TEMP/cn-bin"
+          mkdir -p "$bin"
+          for attempt in 1 2 3 4 5; do
+            if curl -fsSL "$url" --output "$bin/cn" \
+              && [ "$(head -c 4 "$bin/cn" | od -An -tx1 | tr -d ' ')" = "7f454c46" ]; then
+              chmod +x "$bin/cn"
+              echo "$bin" >> "$GITHUB_PATH"
+              exit 0
+            fi
+            echo "cn download attempt $attempt failed ($(wc -c < "$bin/cn" 2>/dev/null || echo 0) bytes)"
+            sleep $((attempt * 10))
+          done
+          echo "::error::could not download cn"
+          exit 1
+
+      # The command prints a version line before its JSON.
+      - name: Draft Cloud release
+        id: cn_release
+        env:
+          CN_API_KEY: ${{ secrets.CN_API_KEY }}
+        run: |
+          out=$(cn release draft "$CN_APPLICATION" "${{ steps.version.outputs.version }}" \
+            --notes-file "kontroll/release-notes/$GITHUB_REF_NAME.md")
+          printf '%s\n' "$out"
+          json=$(printf '%s\n' "$out" | sed -n '/^{/,$p')
+          id=$(printf '%s\n' "$json" | jq -r '.id // empty')
+          if [ -z "$id" ]; then
+            echo "::error::could not read the release id from the draft output"
+            exit 1
+          fi
+          if [ "$(printf '%s\n' "$json" | jq -r '.notes // empty')" = "" ]; then
+            echo "::error::the draft came back without notes"
+            exit 1
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "release $id"
+
+      # Cloud has no universal platform: the universal archive answers both
+      # macOS arches.
+      - name: Upload to Cloud
+        env:
+          CN_API_KEY: ${{ secrets.CN_API_KEY }}
+          RELEASE_ID: ${{ steps.cn_release.outputs.id }}
+        run: |
+          while read -r platform file; do
+            cn release upload "$CN_APPLICATION" "$RELEASE_ID" \
+              --update-platform "$platform" \
+              --public-platform "cli-$platform" \
+              --file "artifacts/$file" \
+              --signature "artifacts/$file.sig" < /dev/null
+          done <<'LIST'
+          linux-x86_64 kontroll-linux-x86_64.tar.gz
+          linux-aarch64 kontroll-linux-aarch64.tar.gz
+          windows-x86_64 kontroll-windows-x86_64.zip
+          windows-aarch64 kontroll-windows-aarch64.zip
+          darwin-x86_64 kontroll-macos-universal.tar.gz
+          darwin-aarch64 kontroll-macos-universal.tar.gz
+          LIST
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: kontroll/release-notes/${{ github.ref_name }}.md
+          files: artifacts/*
+
+      - name: Publish Cloud release
+        env:
+          CN_API_KEY: ${{ secrets.CN_API_KEY }}
+        run: cn release publish "$CN_APPLICATION" "${{ steps.cn_release.outputs.id }}"
+
+  # Mirrors the public archives to downloads.zsa.io. Runs after the Cloud
+  # release is live, so a failure here leaves it untouched and this job can be
+  # re-run on its own.
+  downloads:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: kontroll
+          persist-credentials: false
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # The per-arch macOS archives and the updater .sig files stay off the site.
+      - name: Collect public downloads
+        run: |
+          mkdir downloads
+          for name in \
+            kontroll-macos-universal.tar.gz \
+            kontroll-windows-x86_64.zip \
+            kontroll-windows-aarch64.zip \
+            kontroll-linux-x86_64.tar.gz \
+            kontroll-linux-aarch64.tar.gz; do
+            cp "artifacts/$name" downloads/
+          done
+          ls -l downloads
+
+      - name: Upload to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.DOWNLOADS_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          for file in downloads/*; do
+            name=$(basename "$file")
+            case "$name" in
+              *.tar.gz) type=application/gzip ;;
+              *.zip) type=application/zip ;;
+              *) echo "::error::no content type for $name"; exit 1 ;;
+            esac
+            npx --yes wrangler@4.151.2 r2 object put \
+              "zsa-downloads/files/kontroll/$version/$name" \
+              --file "$file" --content-type "$type" --remote
+          done
+
+      - name: Notify the downloads site
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_DISPATCH_TOKEN }}
+        run: |
+          for file in downloads/*; do
+            jq -n \
+              --arg name "$(basename "$file")" \
+              --argjson size "$(stat -c %s "$file")" \
+              --arg sha256 "$(sha256sum "$file" | cut -d ' ' -f 1)" \
+              '{name: $name, size: $size, sha256: $sha256}'
+          done > files.json
+          jq -n \
+            --arg product kontroll \
+            --arg version "${GITHUB_REF_NAME#v}" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --rawfile notes "kontroll/release-notes/$GITHUB_REF_NAME.md" \
+            --slurpfile files files.json \
+            '{event_type: "release-published",
+              client_payload: {product: $product, version: $version, date: $date, notes: $notes, files: $files}}' \
+            > payload.json
+          jq '.client_payload | del(.notes)' payload.json
+          gh api --method POST repos/zsa/downloads/dispatches --input payload.json

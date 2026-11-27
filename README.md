@@ -10,15 +10,25 @@ Feel free to submit scripts that use Kontroll as pull requests via the [examples
 
 ## Installation
 
-If you have the [rust toolchain installed](/dependencies.md), you can build Kontroll by cloning this repository and running the following command:
+Download the latest release from [downloads.zsa.io](https://downloads.zsa.io) or the [releases page](https://github.com/zsa/kontroll/releases), unpack it and add `kontroll` to your PATH. The Windows and macOS builds are signed.
+
+To update it later, run:
+
+```bash
+kontroll upgrade
+```
+
+`kontroll upgrade --check` only reports whether a newer version exists. Copies installed by a package manager are updated through that package manager instead.
+
+### Building from source
+
+If you have the [rust toolchain installed](/dependencies.md), you can build Kontroll by cloning this repository next to a clone of [zapp](https://github.com/zsa/zapp) (Kontroll uses zapp's libraries from `../zapp`) and running the following command:
 
 ```bash
 cargo build --release
 ```
 
-Bluetooth support is on by default. To build without it, run `cargo build --release --no-default-features`.
-
-Otherwise, you can download the latest release from the [releases page](https://github.com/zsa/kontroll/releases) and add it to your PATH.
+Bluetooth support and `kontroll upgrade` are on by default (the `ble` and `upgrade` features). To build without them, run `cargo build --release --no-default-features`. If you use Kontroll as a library, `default-features = false, features = ["ble"]` leaves out the upgrade dependencies.
 
 ## Prerequisites
 
@@ -61,6 +71,7 @@ Commands:
   increase-brightness  Increase the brightness of the keyboard's LEDs
   decrease-brightness  Decrease the brightness of the keyboard's LEDs
   disconnect           Deprecated, does nothing: Kontroll closes the keyboard after each command
+  upgrade              Update kontroll itself to the newest release
   help                 Print this message or the help of the given subcommand(s)
 
 Options:

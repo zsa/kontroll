@@ -18,6 +18,9 @@ The USB side builds hidapi's C code against libudev, so it needs a C compiler,
 Bluetooth goes through BlueZ over D-Bus in pure Rust and needs nothing extra
 to build; BlueZ must be running to use it.
 
+`kontroll upgrade` (the default `upgrade` feature) uses rustls with aws-lc,
+whose C code builds with the same C compiler.
+
 To open the keyboard without root, install ZSA's udev rules from
 [zapp](https://github.com/zsa/zapp/tree/main/udev):
 
